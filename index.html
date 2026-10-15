@@ -1,0 +1,2620 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Actas de Visita de Obra</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1B3A5C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Actas Obra">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --paper:#FAF7F0;
+  --paper-dim:#F1ECDF;
+  --ink:#1F2320;
+  --ink-soft:#4B5049;
+  --blueprint:#1B3A5C;
+  --blueprint-light:#2F5C82;
+  --safety:#D9622B;
+  --safety-dark:#B84E1E;
+  --concrete:#8C877D;
+  --concrete-line:#D9D2C2;
+  --resolved:#3F6B4D;
+  --resolved-bg:#E4EEE6;
+  --pending:#B0402E;
+  --pending-bg:#F5E4DF;
+  --radius:3px;
+  --shadow:0 1px 2px rgba(31,35,32,0.08), 0 4px 14px rgba(31,35,32,0.06);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper-dim);
+  color:var(--ink);
+  font-family:'Public Sans',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;letter-spacing:-0.01em;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+button{font-family:inherit;cursor:pointer;}
+input,select,textarea{font-family:inherit;}
+::selection{background:var(--safety);color:white;}
+
+/* ---------- App shell ---------- */
+#app{max-width:640px;margin:0 auto;min-height:100vh;background:var(--paper);position:relative;box-shadow:var(--shadow);}
+.topbar{
+  position:sticky;top:0;z-index:20;
+  background:var(--blueprint);color:#EFE9DA;
+  padding:14px 16px;display:flex;align-items:center;gap:10px;
+  border-bottom:3px solid var(--safety);
+}
+.topbar .back-btn{
+  background:transparent;border:none;color:#EFE9DA;font-size:20px;
+  width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+  border-radius:var(--radius);
+}
+.topbar .back-btn:active{background:rgba(255,255,255,0.12);}
+.topbar-titles{flex:1;min-width:0;}
+.topbar-eyebrow{
+  font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;
+  text-transform:uppercase;color:var(--safety);opacity:0.95;margin:0 0 2px;
+}
+.topbar-title{font-size:17px;font-weight:600;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.screen{padding:16px 16px 100px;animation:fadein 0.18s ease;}
+@keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+/* ---------- Blueprint corner ticks (signature texture) ---------- */
+.tick-frame{position:relative;}
+.tick-frame::before,.tick-frame::after{
+  content:'';position:absolute;width:10px;height:10px;
+  border-top:1.5px solid var(--concrete-line);border-left:1.5px solid var(--concrete-line);
+  top:0;left:0;
+}
+.tick-frame::after{top:auto;left:auto;bottom:0;right:0;border-top:none;border-left:none;
+  border-bottom:1.5px solid var(--concrete-line);border-right:1.5px solid var(--concrete-line);}
+
+/* ---------- Cards ---------- */
+.card{
+  background:white;border:1px solid var(--concrete-line);border-radius:var(--radius);
+  padding:16px;margin-bottom:12px;
+}
+.section-label{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.1em;
+  text-transform:uppercase;color:var(--blueprint-light);font-weight:600;
+  display:flex;align-items:center;gap:8px;margin:0 0 12px;
+}
+.section-label::after{content:'';flex:1;height:1px;background:var(--concrete-line);}
+
+/* ---------- Buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:11px 18px;border-radius:var(--radius);border:1.5px solid transparent;
+  font-size:14px;font-weight:600;transition:transform 0.08s ease, background 0.15s;
+}
+.btn:active{transform:scale(0.98);}
+.btn-primary{background:var(--safety);color:white;}
+.btn-primary:active{background:var(--safety-dark);}
+.btn-outline{background:transparent;border-color:var(--blueprint);color:var(--blueprint);}
+.btn-outline:active{background:var(--blueprint);color:white;}
+.btn-ghost{background:transparent;color:var(--ink-soft);border-color:var(--concrete-line);}
+.btn-block{width:100%;}
+.btn-sm{padding:7px 12px;font-size:12.5px;}
+.btn-danger{background:transparent;color:var(--pending);border-color:var(--pending-bg);}
+
+/* ---------- Forms ---------- */
+label{display:block;font-size:11.5px;font-weight:600;color:var(--ink-soft);margin:0 0 4px;text-transform:uppercase;letter-spacing:0.04em;}
+.field{margin-bottom:14px;}
+input[type=text],input[type=date],select,textarea{
+  width:100%;border:1.5px solid var(--concrete-line);border-radius:var(--radius);
+  padding:10px 11px;font-size:14.5px;color:var(--ink);background:var(--paper);
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--blueprint-light);outline-offset:1px;border-color:var(--blueprint-light);}
+textarea{min-height:80px;resize:vertical;line-height:1.45;}
+.hint{font-size:11.5px;color:var(--concrete);margin-top:4px;}
+
+/* ---------- Project list ---------- */
+.obra-card{
+  display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:10px;
+  background:white;border:1px solid var(--concrete-line);border-radius:var(--radius);
+  cursor:pointer;position:relative;
+}
+.obra-card:active{background:var(--paper-dim);}
+.obra-num{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--concrete);
+  width:26px;flex-shrink:0;text-align:center;
+}
+.obra-info{flex:1;min-width:0;}
+.obra-name{font-weight:600;font-size:15px;margin:0 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.obra-sub{font-size:12.5px;color:var(--concrete);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.obra-chevron{color:var(--concrete);font-size:18px;}
+
+.empty-state{text-align:center;padding:48px 20px;color:var(--concrete);}
+.empty-state .icon{font-size:38px;margin-bottom:10px;opacity:0.6;}
+.empty-state p{margin:4px 0;font-size:13.5px;}
+
+.fab{
+  position:fixed;bottom:22px;left:50%;transform:translateX(calc(-320px + 16px));
+  z-index:15;
+}
+@media(max-width:672px){.fab{transform:none;right:16px;left:auto;}}
+
+/* ---------- Project home ---------- */
+.stat-row{display:flex;gap:10px;margin-bottom:14px;}
+.stat-box{flex:1;background:white;border:1px solid var(--concrete-line);border-radius:var(--radius);padding:12px;text-align:center;}
+.stat-num{font-family:'Space Grotesk';font-size:24px;font-weight:700;color:var(--blueprint);}
+.stat-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--concrete);margin-top:2px;}
+
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.action-tile{
+  background:white;border:1px solid var(--concrete-line);border-radius:var(--radius);
+  padding:16px 12px;text-align:center;
+}
+.action-tile:active{background:var(--paper-dim);}
+.action-tile .icon{font-size:22px;margin-bottom:6px;display:block;}
+.action-tile .label{font-size:13px;font-weight:600;}
+
+/* ---------- Acta list rows ---------- */
+.acta-row{
+  display:flex;align-items:center;gap:12px;padding:13px 14px;margin-bottom:9px;
+  background:white;border:1px solid var(--concrete-line);border-radius:var(--radius);
+}
+.acta-badge{
+  font-family:'IBM Plex Mono';font-weight:600;font-size:13px;color:var(--blueprint);
+  background:var(--paper-dim);border:1px solid var(--concrete-line);border-radius:var(--radius);
+  padding:4px 8px;flex-shrink:0;
+}
+.acta-meta{flex:1;min-width:0;}
+.acta-date{font-size:13px;font-weight:600;margin:0;}
+.acta-sub{font-size:11.5px;color:var(--concrete);margin:2px 0 0;}
+.status-pill{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;
+  padding:3px 8px;border-radius:20px;flex-shrink:0;
+}
+.status-cerrada{background:var(--resolved-bg);color:var(--resolved);}
+.status-abierta{background:var(--pending-bg);color:var(--pending);}
+
+/* ---------- Stamp (signature element) ---------- */
+.sello{
+  width:56px;height:56px;border-radius:50%;border:2.5px solid var(--resolved);
+  color:var(--resolved);display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transform:rotate(-9deg);position:relative;opacity:0.9;
+}
+.sello::before{
+  content:'';position:absolute;inset:5px;border:1px solid var(--resolved);border-radius:50%;
+}
+.sello-text{font-family:'Space Grotesk';font-size:8px;font-weight:700;text-align:center;line-height:1.1;letter-spacing:0.02em;}
+
+/* ---------- Repeating item rows (asuntos) ---------- */
+.asunto-item{
+  border:1.5px solid var(--concrete-line);border-radius:var(--radius);padding:12px;margin-bottom:10px;
+  background:var(--paper);position:relative;
+}
+.asunto-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.asunto-code{font-family:'IBM Plex Mono';font-size:12px;font-weight:600;color:var(--blueprint-light);}
+.remove-x{background:none;border:none;color:var(--pending);font-size:18px;line-height:1;padding:2px 6px;}
+.carried-tag{
+  display:inline-block;font-size:9.5px;text-transform:uppercase;letter-spacing:0.05em;
+  background:var(--blueprint);color:white;padding:2px 6px;border-radius:2px;margin-left:8px;font-weight:600;
+}
+.check-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px;color:var(--ink-soft);}
+.check-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--resolved);}
+
+.presentes-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.presente-chk{
+  display:flex;align-items:center;gap:8px;border:1.5px solid var(--concrete-line);border-radius:var(--radius);
+  padding:9px 10px;font-size:12.5px;
+}
+.presente-chk input{width:16px;height:16px;accent-color:var(--blueprint);flex-shrink:0;}
+.presente-chk .r-code{font-family:'IBM Plex Mono';font-weight:600;color:var(--blueprint);}
+
+.add-row-btn{
+  width:100%;border:1.5px dashed var(--concrete-line);background:transparent;border-radius:var(--radius);
+  padding:11px;font-size:13px;font-weight:600;color:var(--blueprint-light);margin-top:2px;
+}
+.add-row-btn:active{background:var(--paper-dim);}
+
+.sticky-footer{
+  position:sticky;bottom:0;background:var(--paper);border-top:1px solid var(--concrete-line);
+  padding:12px 16px;display:flex;gap:10px;margin:0 -16px -100px;
+}
+
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:var(--radius);
+  font-size:13px;z-index:100;box-shadow:var(--shadow);opacity:0;transition:opacity 0.25s;pointer-events:none;
+  max-width:88%;text-align:center;
+}
+.toast.show{opacity:1;}
+
+.loading-overlay{
+  position:fixed;inset:0;background:rgba(31,35,32,0.55);z-index:200;
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:white;
+}
+.loading-overlay.show{display:flex;}
+.spinner{width:30px;height:30px;border:3px solid rgba(255,255,255,0.3);border-top-color:var(--safety);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.confirm-overlay{
+  position:fixed;inset:0;background:rgba(31,35,32,0.5);z-index:150;
+  display:none;align-items:flex-end;justify-content:center;
+}
+.confirm-overlay.show{display:flex;}
+.confirm-sheet{
+  background:var(--paper);width:100%;max-width:640px;border-radius:14px 14px 0 0;
+  padding:20px 16px calc(20px + env(safe-area-inset-bottom));animation:slideup 0.2s ease;
+}
+@keyframes slideup{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.confirm-sheet h3{margin:0 0 6px;font-size:16px;}
+.confirm-sheet p{margin:0 0 16px;font-size:13.5px;color:var(--ink-soft);line-height:1.5;}
+.confirm-actions{display:flex;gap:10px;}
+
+.divider-note{
+  font-size:12px;color:var(--concrete);text-align:center;padding:8px 0 2px;font-style:italic;
+}
+
+.pending-carry-box{
+  background:var(--paper-dim);border-left:3px solid var(--blueprint);border-radius:0 var(--radius) var(--radius) 0;
+  padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:var(--ink-soft);line-height:1.5;
+}
+
+h2.screen-title{font-size:19px;margin:2px 0 3px;}
+p.screen-sub{font-size:12.5px;color:var(--concrete);margin:0 0 18px;}
+
+.responsable-select{width:100%;}
+
+@media(min-width:672px){
+  body{padding:20px 0;}
+}
+/* ---------- Fotos de asunto ---------- */
+.fotos-block{margin-top:10px;}
+.fotos-thumbs{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;}
+.foto-thumb{
+  position:relative;width:72px;height:72px;border-radius:var(--radius);overflow:hidden;
+  border:1.5px solid var(--concrete-line);background:var(--paper-dim);flex-shrink:0;
+}
+.foto-thumb img{width:100%;height:100%;object-fit:cover;display:block;background:var(--concrete-line);}
+.foto-thumb-actions{position:absolute;top:2px;right:2px;display:flex;gap:3px;}
+.foto-thumb-actions button{
+  width:22px;height:22px;border-radius:50%;border:none;background:rgba(31,35,32,0.72);color:white;
+  font-size:11px;display:flex;align-items:center;justify-content:center;padding:0;
+}
+.foto-annotated-badge{
+  position:absolute;bottom:2px;left:2px;background:rgba(27,58,92,0.85);color:white;
+  font-size:8.5px;font-weight:700;padding:1px 4px;border-radius:2px;letter-spacing:0.02em;
+}
+.foto-add-btn{
+  width:72px;height:72px;border-radius:var(--radius);border:1.5px dashed var(--concrete-line);
+  display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--concrete);
+  flex-shrink:0;cursor:pointer;background:transparent;
+}
+.foto-add-btn:active{background:var(--paper-dim);}
+.foto-thumb.view-only{cursor:pointer;}
+
+/* ---------- Visor de foto a pantalla completa ---------- */
+.photo-viewer-overlay{
+  position:fixed;inset:0;background:rgba(15,17,15,0.94);z-index:300;
+  display:none;align-items:center;justify-content:center;flex-direction:column;
+}
+.photo-viewer-overlay.show{display:flex;}
+.photo-viewer-overlay img{max-width:94%;max-height:82%;object-fit:contain;border-radius:2px;}
+.photo-viewer-close{
+  position:absolute;top:18px;right:18px;width:36px;height:36px;border-radius:50%;
+  background:rgba(255,255,255,0.14);color:white;border:none;font-size:18px;
+}
+
+/* ---------- Editor de anotaciones ---------- */
+.annotator-overlay{
+  position:fixed;inset:0;background:#14161a;z-index:320;
+  display:none;flex-direction:column;
+}
+.annotator-overlay.show{display:flex;}
+.annotator-topbar{
+  display:flex;align-items:center;justify-content:space-between;padding:10px 14px;
+  background:#1c1f24;color:white;flex-shrink:0;
+}
+.annotator-topbar button{
+  background:transparent;border:1.5px solid rgba(255,255,255,0.3);color:white;border-radius:var(--radius);
+  padding:7px 12px;font-size:12.5px;font-weight:600;
+}
+.annotator-canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px;touch-action:none;}
+.annotator-canvas-wrap canvas{max-width:100%;max-height:100%;touch-action:none;border-radius:2px;box-shadow:0 2px 14px rgba(0,0,0,0.4);}
+.annotator-toolbar{
+  display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 14px;
+  background:#1c1f24;flex-shrink:0;flex-wrap:wrap;
+}
+.annotator-swatch{
+  width:28px;height:28px;border-radius:50%;border:2.5px solid transparent;padding:0;
+}
+.annotator-swatch.active{border-color:white;}
+.annotator-toolbar .btn{padding:8px 12px;font-size:12px;}
+
+/* ---------- Fotos en el PDF (no aplica, solo referencia) ---------- */
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="topbar">
+    <button class="back-btn" id="backBtn" style="visibility:hidden;">‹</button>
+    <div class="topbar-titles">
+      <p class="topbar-eyebrow" id="topEyebrow">ACTAS DE OBRA</p>
+      <h1 class="topbar-title" id="topTitle">Proyectos</h1>
+    </div>
+  </div>
+  <div class="screen" id="screen"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div><div id="loadingMsg">Procesando…</div></div>
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-sheet">
+    <h3 id="confirmTitle">¿Confirmar?</h3>
+    <p id="confirmBody"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" style="flex:1" id="confirmCancel">Cancelar</button>
+      <button class="btn btn-primary" style="flex:1" id="confirmOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="photo-viewer-overlay" id="photoViewerOverlay">
+  <button class="photo-viewer-close" id="photoViewerClose">✕</button>
+  <img id="photoViewerImg" src="" alt="foto">
+</div>
+
+<div class="annotator-overlay" id="annotatorOverlay">
+  <div class="annotator-topbar">
+    <button id="annotatorCancel">Cancelar</button>
+    <span style="font-size:12.5px;font-weight:600;">Dibuja sobre la foto</span>
+    <button id="annotatorSave" style="background:var(--safety);border-color:var(--safety);">Guardar</button>
+  </div>
+  <div class="annotator-canvas-wrap">
+    <canvas id="annotatorCanvas"></canvas>
+  </div>
+  <div class="annotator-toolbar">
+    <button type="button" class="annotator-swatch active" data-color="#E8332B" style="background:#E8332B;"></button>
+    <button type="button" class="annotator-swatch" data-color="#F2C230" style="background:#F2C230;"></button>
+    <button type="button" class="annotator-swatch" data-color="#2F8FE0" style="background:#2F8FE0;"></button>
+    <button type="button" class="annotator-swatch" data-color="#FFFFFF" style="background:#FFFFFF;"></button>
+    <button type="button" class="annotator-swatch" data-color="#111111" style="background:#111111;"></button>
+    <button class="btn btn-ghost" id="annotatorUndo" style="color:white;border-color:rgba(255,255,255,0.3);">↩ Deshacer</button>
+    <button class="btn btn-ghost" id="annotatorClear" style="color:white;border-color:rgba(255,255,255,0.3);">Borrar todo</button>
+  </div>
+</div>
+
+<script>
+/* ======================================================================
+   ACTAS DE VISITA DE OBRA — lógica de la aplicación
+   ====================================================================== */
+
+const ROLES = [
+  {code:'P',   label:'Propiedad'},
+  {code:'DO',  label:'Director de Obra'},
+  {code:'DEO', label:'D. de Ejecución de Obra'},
+  {code:'C',   label:'Contrata'},
+  {code:'CO',  label:'Coordinador S y S'},
+  {code:'R',   label:'Recurso Preventivo'},
+];
+const roleLabel = c => (ROLES.find(r=>r.code===c)||{}).label || c;
+
+let state = {
+  screen: 'obras',       // obras | obraForm | obraHome | actaForm | registro | actaView
+  obraId: null,
+  actaDraft: null,
+  editingObra: null,
+  obrasIndex: [],         // [{id,nombre}]
+  currentObraData: null,  // {obra:{...}, actas:[...]}
+};
+
+function uid(){ return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+
+function showToast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2400);
+}
+function showLoading(msg){
+  document.getElementById('loadingMsg').textContent = msg||'Procesando…';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading(){ document.getElementById('loadingOverlay').classList.remove('show'); }
+
+function confirmDialog(title, body){
+  return new Promise(resolve=>{
+    const ov=document.getElementById('confirmOverlay');
+    document.getElementById('confirmTitle').textContent=title;
+    document.getElementById('confirmBody').textContent=body;
+    ov.classList.add('show');
+    const ok=document.getElementById('confirmOk'), cancel=document.getElementById('confirmCancel');
+    const cleanup=()=>{ov.classList.remove('show'); ok.onclick=null; cancel.onclick=null;};
+    ok.onclick=()=>{cleanup(); resolve(true);};
+    cancel.onclick=()=>{cleanup(); resolve(false);};
+  });
+}
+
+/* ---------------------- STORAGE LAYER (IndexedDB) ---------------------- */
+// Base de datos local del propio navegador: funciona igual en cualquier
+// dispositivo/navegador moderno, sin depender de ningún servicio externo.
+// Se mantiene una caché en memoria para lecturas instantáneas.
+const memCache = {};
+const IDB_NAME = 'actas_obra_db';
+const IDB_VERSION = 1;
+const IDB_STORE = 'kv';
+let idbPromise = null;
+
+function openIDB(){
+  if(idbPromise) return idbPromise;
+  idbPromise = new Promise((resolve, reject)=>{
+    if(!('indexedDB' in window)){ reject(new Error('IndexedDB no disponible en este navegador')); return; }
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = (e)=>{
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+  return idbPromise;
+}
+function idbGet(key){
+  return openIDB().then(db=>new Promise((resolve,reject)=>{
+    const tx = db.transaction(IDB_STORE,'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = ()=>resolve(req.result===undefined?null:req.result);
+    req.onerror = ()=>reject(req.error);
+  }));
+}
+function idbSet(key, value){
+  return openIDB().then(db=>new Promise((resolve,reject)=>{
+    const tx = db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = ()=>resolve(true);
+    tx.onerror = ()=>reject(tx.error);
+  }));
+}
+function idbDel(key){
+  return openIDB().then(db=>new Promise((resolve,reject)=>{
+    const tx = db.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = ()=>resolve(true);
+    tx.onerror = ()=>reject(tx.error);
+  }));
+}
+
+async function storageGet(key){
+  if(memCache.hasOwnProperty(key)) return memCache[key];
+  try{
+    const val = await idbGet(key);
+    if(val!==null && val!==undefined) memCache[key] = val;
+    return val===undefined ? null : val;
+  }catch(e){
+    console.error('IndexedDB get failed', e);
+    return null;
+  }
+}
+
+async function storageSet(key, value){
+  memCache[key] = value; // disponible al instante, aunque el guardado en disco tarde un poco
+  try{
+    await idbSet(key, value);
+    return true;
+  }catch(e){
+    console.error('IndexedDB set failed', e);
+    showToast('No se pudo guardar en el almacenamiento del dispositivo');
+    return null;
+  }
+}
+
+/* ---------------------- COPIA DE SEGURIDAD MANUAL ---------------------- */
+// Como red de seguridad independiente de window.storage: permite descargar y
+// restaurar todos los proyectos y actas como un archivo .json.
+async function backupAllData(){
+  await loadObrasIndex();
+  const bundle = { version:1, exportedAt:new Date().toISOString(), obrasIndex: state.obrasIndex, obras: {} };
+  for(const item of state.obrasIndex){
+    const data = await loadObraData(item.id);
+    if(data) bundle.obras[item.id] = data;
+  }
+  return bundle;
+}
+async function downloadBackup(){
+  showLoading('Preparando copia de seguridad…');
+  try{
+    const bundle = await backupAllData();
+    const blob = new Blob([JSON.stringify(bundle,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'copia_seguridad_actas_'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    hideLoading();
+    showToast('Copia de seguridad descargada');
+  }catch(e){
+    console.error(e); hideLoading(); showToast('No se pudo generar la copia de seguridad');
+  }
+}
+function triggerRestoreFile(){
+  const input = document.createElement('input');
+  input.type='file'; input.accept='application/json,.json';
+  input.addEventListener('change', async ()=>{
+    const file = input.files[0];
+    if(!file) return;
+    showLoading('Restaurando copia de seguridad…');
+    try{
+      const text = await file.text();
+      const bundle = JSON.parse(text);
+      if(!bundle || !bundle.obrasIndex || !bundle.obras) throw new Error('archivo no válido');
+      // fusiona con lo existente (la copia importada tiene prioridad por id)
+      const existingIds = new Set(state.obrasIndex.map(o=>o.id));
+      bundle.obrasIndex.forEach(o=>{ if(!existingIds.has(o.id)) state.obrasIndex.push(o); });
+      await saveObrasIndex();
+      for(const id of Object.keys(bundle.obras)){
+        await saveObraData(id, bundle.obras[id]);
+      }
+      hideLoading();
+      showToast('Copia de seguridad restaurada');
+      goObras();
+    }catch(e){
+      console.error(e); hideLoading(); showToast('El archivo seleccionado no es una copia de seguridad válida');
+    }
+  });
+  input.click();
+}
+
+async function loadObrasIndex(){
+  const idx = await storageGet('obras_index');
+  state.obrasIndex = idx || [];
+  return state.obrasIndex;
+}
+async function saveObrasIndex(){
+  await storageSet('obras_index', state.obrasIndex);
+}
+async function loadObraData(obraId){
+  const d = await storageGet('obra_data:'+obraId);
+  return d;
+}
+async function saveObraData(obraId, data){
+  await storageSet('obra_data:'+obraId, data);
+}
+
+/* ---------------------- NAVIGATION ---------------------- */
+function setTop(eyebrow, title, showBack){
+  document.getElementById('topEyebrow').textContent = eyebrow;
+  document.getElementById('topTitle').textContent = title;
+  document.getElementById('backBtn').style.visibility = showBack ? 'visible':'hidden';
+}
+document.getElementById('backBtn').addEventListener('click', ()=>{
+  if(state.screen==='obraForm'||state.screen==='obraHome'){ goObras(); }
+  else if(state.screen==='actaForm'||state.screen==='registro'||state.screen==='actaView'){ goObraHome(state.obraId); }
+  else { goObras(); }
+});
+
+async function goObras(){
+  state.screen='obras'; state.obraId=null;
+  await loadObrasIndex();
+  render();
+}
+async function goObraHome(obraId){
+  state.screen='obraHome'; state.obraId=obraId;
+  state.currentObraData = await loadObraData(obraId);
+  render();
+}
+async function goObraForm(existingId){
+  state.screen='obraForm';
+  state.editingObra = existingId ? (await loadObraData(existingId)).obra : null;
+  state.obraId = existingId || null;
+  render();
+}
+async function goActaForm(obraId){
+  state.screen='actaForm'; state.obraId=obraId;
+  if(!state.currentObraData) state.currentObraData = await loadObraData(obraId);
+  const data = state.currentObraData;
+  const cerradas = data.actas.filter(a=>a.cerrada);
+  const nextNum = 'A' + String(cerradas.length+1).padStart(2,'0');
+  // Carry forward pending items from last closed acta. Las fotos se DUPLICAN
+  // (nuevo id, mismo contenido) para que cada acta quede independiente: si se
+  // quita una foto en la acta nueva, la acta anterior ya cerrada no se ve afectada.
+  let carried = [];
+  if(cerradas.length){
+    const last = cerradas[cerradas.length-1];
+    const openPend = (last.asuntosPendientes||[]).filter(p=>!p.resuelto);
+    for(const p of openPend){
+      const newFotos = [];
+      for(const f of (p.fotos||[])){
+        const rec = await loadPhotoRecord(f.id);
+        if(rec){
+          const newId = await savePhotoRecord(rec.dataUrl, rec.width, rec.height);
+          newFotos.push({ id:newId, annotated:!!f.annotated, addedAt:f.addedAt });
+        }
+      }
+      carried.push({
+        id: uid(), codigo:p.codigo, texto:p.texto, responsables:respArray(p),
+        origen:'anterior', resuelto:false, fechaApertura:p.fechaApertura||last.fecha,
+        resueltoTexto:'', fechaResolucion:null, fotos:newFotos
+      });
+    }
+  }
+  state.actaDraft = {
+    id: uid(), numero: nextNum,
+    fecha: new Date().toISOString().slice(0,10),
+    presentes: [],
+    asuntosTratados: [],
+    asuntosPendientes: carried,
+    cerrada: false
+  };
+  render();
+}
+async function goRegistro(obraId){
+  state.screen='registro'; state.obraId=obraId;
+  if(!state.currentObraData) state.currentObraData = await loadObraData(obraId);
+  render();
+}
+function goActaView(acta){
+  state.screen='actaView'; state.viewActa = acta;
+  render();
+}
+
+/* ---------------------- RENDER ROUTER ---------------------- */
+function render(){
+  const el = document.getElementById('screen');
+  if(state.screen==='obras'){ setTop('ACTAS DE OBRA','Proyectos', false); el.innerHTML = renderObrasList(); bindObrasList(); }
+  else if(state.screen==='obraForm'){ setTop(state.editingObra?'EDITAR PROYECTO':'NUEVO PROYECTO', state.editingObra?state.editingObra.obra:'Datos de obra', true); el.innerHTML = renderObraForm(); bindObraForm(); }
+  else if(state.screen==='obraHome'){ const o=state.currentObraData.obra; setTop('PROYECTO', o.obra, true); el.innerHTML = renderObraHome(); bindObraHome(); }
+  else if(state.screen==='actaForm'){ const o=state.currentObraData.obra; setTop('ACTA '+state.actaDraft.numero, o.obra, true); el.innerHTML = renderActaForm(); bindActaForm(); }
+  else if(state.screen==='registro'){ const o=state.currentObraData.obra; setTop('REGISTRO DE ACTAS', o.obra, true); el.innerHTML = renderRegistro(); bindRegistro(); }
+  else if(state.screen==='actaView'){ setTop('ACTA '+state.viewActa.numero, state.currentObraData.obra.obra, true); el.innerHTML = renderActaView(); bindActaView(); }
+  else if(state.screen==='syncSettings'){ setTop('AJUSTES','Sincronización con Sheets', true); el.innerHTML = renderSyncSettings(); bindSyncSettings(); }
+  else if(state.screen==='dropboxSettings'){ setTop('AJUSTES','Dropbox', true); el.innerHTML = renderDropboxSettings(); bindDropboxSettings(); }
+}
+
+/* ==========================================================
+   SCREEN: Lista de proyectos
+   ========================================================== */
+function renderObrasList(){
+  const backupBar = `
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button class="btn btn-outline btn-sm" style="flex:1" id="backupBtn">⭳ Copia de seguridad</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1" id="restoreBtn">⭱ Restaurar</button>
+    </div>
+    <button class="btn btn-ghost btn-sm btn-block" id="excelAllBtn" style="margin-bottom:8px;">📊 Exportar Excel de todos los proyectos</button>
+    <button class="btn btn-ghost btn-sm btn-block" id="syncSettingsBtn" style="margin-bottom:8px;">🔗 Sincronización con Google Sheets</button>
+    <button class="btn btn-ghost btn-sm btn-block" id="dropboxSettingsBtn" style="margin-bottom:14px;">☁️ Excel en vivo en Dropbox</button>`;
+  if(!state.obrasIndex.length){
+    return `
+      <div class="empty-state tick-frame" style="margin-top:10px;">
+        <div class="icon">🏗️</div>
+        <h2 class="screen-title">Sin proyectos todavía</h2>
+        <p>Crea tu primer proyecto para empezar a generar actas de visita.</p>
+      </div>
+      <button class="btn btn-primary btn-block" id="newObraBtn" style="margin-top:18px;">+ Nuevo proyecto</button>
+      ${backupBar}
+    `;
+  }
+  return `
+    <p class="screen-sub">Selecciona un proyecto o crea uno nuevo.</p>
+    ${state.obrasIndex.map((o,i)=>`
+      <div class="obra-card" data-id="${o.id}">
+        <div class="obra-num mono">${String(i+1).padStart(2,'0')}</div>
+        <div class="obra-info">
+          <p class="obra-name">${esc(o.nombre)}</p>
+          <p class="obra-sub">${esc(o.direccion||'')}</p>
+        </div>
+        <div class="obra-chevron">›</div>
+      </div>
+    `).join('')}
+    <button class="btn btn-primary btn-block" id="newObraBtn" style="margin:6px 0 14px;">+ Nuevo proyecto</button>
+    ${backupBar}
+  `;
+}
+function bindObrasList(){
+  document.querySelectorAll('.obra-card').forEach(c=>{
+    c.addEventListener('click', ()=> goObraHome(c.dataset.id));
+  });
+  const nb = document.getElementById('newObraBtn');
+  if(nb) nb.addEventListener('click', ()=>goObraForm(null));
+  document.getElementById('backupBtn').addEventListener('click', downloadBackup);
+  document.getElementById('restoreBtn').addEventListener('click', triggerRestoreFile);
+  document.getElementById('excelAllBtn').addEventListener('click', exportExcelAllProjects);
+  document.getElementById('syncSettingsBtn').addEventListener('click', goSyncSettings);
+  document.getElementById('dropboxSettingsBtn').addEventListener('click', goDropboxSettings);
+}
+
+/* ==========================================================
+   SCREEN: Formulario de datos de obra
+   ========================================================== */
+function renderObraForm(){
+  const o = state.editingObra || {obra:'',direccion:'',propiedad:'',directorObra:'',deo:'',contrata:'',coordinadorSyS:'',recursoPreventivo:''};
+  const f = (id,label,val,ph)=>`
+    <div class="field">
+      <label>${label}</label>
+      <input type="text" id="${id}" value="${esc(val||'')}" placeholder="${ph||''}">
+    </div>`;
+  return `
+    <p class="screen-sub">Estos datos aparecerán en la cabecera de cada acta (equivalen a la hoja "DATOS OBRA").</p>
+    <div class="card tick-frame">
+      ${f('f_obra','Obra', o.obra,'p.ej. Reparación de terraza')}
+      ${f('f_direccion','Dirección', o.direccion,'Dirección de la obra')}
+      ${f('f_propiedad','Propiedad (P)', o.propiedad)}
+      ${f('f_directorObra','Director de Obra (DO)', o.directorObra)}
+      ${f('f_deo','D. de Ejecución de Obra (DEO)', o.deo)}
+      ${f('f_contrata','Contrata (C)', o.contrata)}
+      ${f('f_coordinadorSyS','Coordinador S y S (CO)', o.coordinadorSyS)}
+      ${f('f_recursoPreventivo','Recurso Preventivo (R)', o.recursoPreventivo)}
+    </div>
+    <button class="btn btn-primary btn-block" id="saveObraBtn">Guardar proyecto</button>
+    ${state.editingObra ? `<button class="btn btn-danger btn-block" id="deleteObraBtn" style="margin-top:10px;">Eliminar proyecto</button>` : ''}
+  `;
+}
+function bindObraForm(){
+  document.getElementById('saveObraBtn').addEventListener('click', async ()=>{
+    const obra = {
+      obra: document.getElementById('f_obra').value.trim(),
+      direccion: document.getElementById('f_direccion').value.trim(),
+      propiedad: document.getElementById('f_propiedad').value.trim(),
+      directorObra: document.getElementById('f_directorObra').value.trim(),
+      deo: document.getElementById('f_deo').value.trim(),
+      contrata: document.getElementById('f_contrata').value.trim(),
+      coordinadorSyS: document.getElementById('f_coordinadorSyS').value.trim(),
+      recursoPreventivo: document.getElementById('f_recursoPreventivo').value.trim(),
+    };
+    if(!obra.obra){ showToast('Indica al menos el nombre de la obra'); return; }
+    showLoading('Guardando proyecto…');
+    let id = state.obraId;
+    if(id){
+      const data = await loadObraData(id);
+      data.obra = obra;
+      await saveObraData(id, data);
+      const idxItem = state.obrasIndex.find(x=>x.id===id);
+      if(idxItem){ idxItem.nombre=obra.obra; idxItem.direccion=obra.direccion; }
+    } else {
+      id = uid();
+      await saveObraData(id, {obra, actas:[]});
+      state.obrasIndex.push({id, nombre:obra.obra, direccion:obra.direccion});
+    }
+    await saveObrasIndex();
+    hideLoading();
+    showToast('Proyecto guardado');
+    goObraHome(id);
+  });
+  const delBtn = document.getElementById('deleteObraBtn');
+  if(delBtn) delBtn.addEventListener('click', async ()=>{
+    const ok = await confirmDialog('Eliminar proyecto', 'Se eliminará el proyecto y todas sus actas de este dispositivo. Esta acción no se puede deshacer.');
+    if(!ok) return;
+    showLoading('Eliminando…');
+    await storageDelete('obra_data:'+state.obraId);
+    state.obrasIndex = state.obrasIndex.filter(x=>x.id!==state.obraId);
+    await saveObrasIndex();
+    hideLoading();
+    showToast('Proyecto eliminado');
+    goObras();
+  });
+}
+
+/* ==========================================================
+   SCREEN: Home de proyecto
+   ========================================================== */
+function renderObraHome(){
+  const data = state.currentObraData;
+  const cerradas = data.actas.filter(a=>a.cerrada);
+  const pendCount = cerradas.length ? (cerradas[cerradas.length-1].asuntosPendientes||[]).filter(p=>!p.resuelto).length : 0;
+  const ultima = cerradas.length ? cerradas[cerradas.length-1] : null;
+  const linkedHandle = localFileHandles[state.obraId];
+  return `
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-num">${cerradas.length}</div><div class="stat-label">Actas cerradas</div></div>
+      <div class="stat-box"><div class="stat-num">${pendCount}</div><div class="stat-label">Asuntos pendientes</div></div>
+    </div>
+    <div class="action-grid">
+      <div class="action-tile" id="tileNueva"><span class="icon">📝</span><span class="label">Nueva acta</span></div>
+      <div class="action-tile" id="tileRegistro"><span class="icon">📚</span><span class="label">Registro</span></div>
+      <div class="action-tile" id="tileEditar"><span class="icon">⚙️</span><span class="label">Editar datos</span></div>
+      <div class="action-tile" id="tileExcel"><span class="icon">📊</span><span class="label">Exportar Excel</span></div>
+    </div>
+    <div class="pending-carry-box">
+      ${linkedHandle
+        ? `🔗 Excel local vinculado: <strong>${esc(linkedHandle.name)}</strong>. Se sobrescribirá solo, en ese mismo archivo, cada vez que cierres una acta (mientras esta pestaña siga abierta).`
+        : `Puedes vincular un archivo Excel de tu disco para que se actualice directamente ahí, sin descargas repetidas. Solo funciona en Chrome o Edge de escritorio, abriendo este archivo fuera de una vista previa integrada.`}
+    </div>
+    <button class="btn btn-outline btn-block" id="linkExcelBtn" style="margin-bottom:16px;">${linkedHandle ? '🔄 Cambiar archivo vinculado' : '🔗 Vincular Excel local'}</button>
+    ${ultima ? `
+      <p class="section-label">Última acta</p>
+      <div class="acta-row" id="lastActaRow" data-idx="${cerradas.length-1}">
+        <div class="acta-badge">${ultima.numero}</div>
+        <div class="acta-meta">
+          <p class="acta-date">${fmtDate(ultima.fecha)}</p>
+          <p class="acta-sub">${(ultima.asuntosTratados||[]).length} asuntos tratados · ${(ultima.asuntosPendientes||[]).filter(p=>!p.resuelto).length} pendientes</p>
+        </div>
+        <div class="sello"><div class="sello-text">ACTA<br>CERRADA</div></div>
+      </div>
+    ` : `<div class="empty-state tick-frame"><div class="icon">📋</div><p>Todavía no hay actas cerradas para este proyecto.</p></div>`}
+  `;
+}
+function bindObraHome(){
+  document.getElementById('linkExcelBtn').addEventListener('click', async ()=>{
+    await linkLocalExcelFile(state.obraId, state.currentObraData.obra);
+    render();
+  });
+  document.getElementById('tileNueva').addEventListener('click', ()=>goActaForm(state.obraId));
+  document.getElementById('tileRegistro').addEventListener('click', ()=>goRegistro(state.obraId));
+  document.getElementById('tileEditar').addEventListener('click', ()=>goObraForm(state.obraId));
+  document.getElementById('tileExcel').addEventListener('click', async ()=>{
+    showLoading('Generando Excel del proyecto…');
+    try{ await exportExcelForObra(state.currentObraData.obra, state.currentObraData.actas); }
+    catch(e){ console.error(e); showToast('Error al generar el Excel'); }
+    hideLoading();
+  });
+  const lastRow = document.getElementById('lastActaRow');
+  if(lastRow) lastRow.addEventListener('click', ()=>{
+    const cerradas = state.currentObraData.actas.filter(a=>a.cerrada);
+    goActaView(cerradas[cerradas.length-1]);
+  });
+}
+
+/* ==========================================================
+   SCREEN: Formulario de nueva acta
+   ========================================================== */
+function renderActaForm(){
+  const d = state.actaDraft;
+  return `
+    <div class="card tick-frame">
+      <p class="section-label">Datos del acta</p>
+      <div class="field">
+        <label>Acta nº</label>
+        <input type="text" id="actaNum" value="${esc(d.numero)}" class="mono">
+      </div>
+      <div class="field">
+        <label>Fecha</label>
+        <input type="date" id="actaFecha" value="${d.fecha}">
+      </div>
+      <label>Presentes</label>
+      <div class="presentes-grid">
+        ${ROLES.map(r=>`
+          <label class="presente-chk" for="chk_${r.code}">
+            <input type="checkbox" id="chk_${r.code}" value="${r.code}" ${d.presentes.includes(r.code)?'checked':''}>
+            <span><span class="r-code">(${r.code})</span> ${r.label}</span>
+          </label>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="card tick-frame">
+      <p class="section-label">Asuntos tratados</p>
+      <div id="tratadosList">${(d.asuntosTratados||[]).map((it,i)=>renderTratadoItem(it,i,d.numero)).join('')}</div>
+      <button class="add-row-btn" id="addTratadoBtn">+ Añadir asunto tratado</button>
+    </div>
+
+    <div class="card tick-frame">
+      <p class="section-label">Asuntos pendientes</p>
+      ${ (d.asuntosPendientes||[]).some(p=>p.origen==='anterior') ? `<div class="pending-carry-box">Se han trasladado automáticamente los asuntos pendientes del acta anterior que no fueron marcados como resueltos. Márcalos como resueltos si ya se han cerrado, o edítalos si continúan abiertos.</div>` : ''}
+      <div id="pendientesList">${(d.asuntosPendientes||[]).map((it,i)=>renderPendienteItem(it,i,d.numero)).join('')}</div>
+      <button class="add-row-btn" id="addPendienteBtn">+ Añadir asunto pendiente</button>
+    </div>
+
+    <div class="sticky-footer">
+      <button class="btn btn-ghost" id="cancelActaBtn" style="flex:1">Cancelar</button>
+      <button class="btn btn-primary" id="closeActaBtn" style="flex:2">Cerrar acta y generar PDF</button>
+    </div>
+  `;
+}
+// Devuelve la lista de códigos de responsable de un asunto, sea cual sea el
+// formato en que esté guardado (array nuevo "responsables", o el campo
+// antiguo "responsable" de un único valor, de actas creadas antes de este cambio).
+function respArray(it){
+  if(Array.isArray(it.responsables)) return it.responsables;
+  if(Array.isArray(it.responsable)) return it.responsable;
+  if(it.responsable) return [it.responsable];
+  return [];
+}
+function respLabelLine(it){
+  const arr = respArray(it);
+  if(!arr.length) return '—';
+  return arr.map(c=>roleLabel(c)+' ('+c+')').join(', ');
+}
+function responsablesCheckboxesHTML(selectedArr){
+  selectedArr = selectedArr || [];
+  return `
+    <div class="presentes-grid responsables-grid" data-field="responsables">
+      ${ROLES.map(r=>`
+        <label class="presente-chk">
+          <input type="checkbox" value="${r.code}" ${selectedArr.includes(r.code)?'checked':''}>
+          <span><span class="r-code">(${r.code})</span> ${r.label}</span>
+        </label>
+      `).join('')}
+    </div>
+  `;
+}
+function renderTratadoItem(it, i, actaNum){
+  const code = it.codigo || (actaNum+'-T'+String(i+1).padStart(2,'0'));
+  return `
+    <div class="asunto-item" data-idx="${i}" data-list="tratados">
+      <div class="asunto-head">
+        <span class="asunto-code mono">${code}</span>
+        <button class="remove-x" data-remove="tratados" data-idx="${i}">✕</button>
+      </div>
+      <div class="field" style="margin-bottom:8px;">
+        <textarea data-field="texto" placeholder="Descripción del asunto tratado…">${esc(it.texto||'')}</textarea>
+      </div>
+      <div class="field" style="margin-bottom:10px;">
+        <label>Responsables (pueden ser varios, estén presentes o no)</label>
+        ${responsablesCheckboxesHTML(respArray(it))}
+      </div>
+      ${fotosThumbsHTML(it.fotos, i, 'tratados')}
+    </div>
+  `;
+}
+function renderPendienteItem(it, i, actaNum){
+  const code = it.codigo || (actaNum+'-'+String(i+1).padStart(2,'0'));
+  return `
+    <div class="asunto-item" data-idx="${i}" data-list="pendientes">
+      <div class="asunto-head">
+        <span class="asunto-code mono">${code}${it.origen==='anterior'?'<span class="carried-tag">Arrastrado</span>':''}</span>
+        <button class="remove-x" data-remove="pendientes" data-idx="${i}">✕</button>
+      </div>
+      ${it.fechaApertura ? `<p class="hint" style="margin:-4px 0 8px;">Abierto el ${fmtDate(it.fechaApertura)}</p>` : ''}
+      <div class="field" style="margin-bottom:8px;">
+        <textarea data-field="texto" placeholder="Descripción del asunto pendiente…">${esc(it.texto||'')}</textarea>
+      </div>
+      <div class="field" style="margin-bottom:10px;">
+        <label>Responsables (pueden ser varios, estén presentes o no)</label>
+        ${responsablesCheckboxesHTML(respArray(it))}
+      </div>
+      ${fotosThumbsHTML(it.fotos, i, 'pendientes')}
+      <label class="check-row"><input type="checkbox" data-field="resuelto" ${it.resuelto?'checked':''}> Resuelto (no se trasladará a la próxima acta)</label>
+      <div class="resolucion-box" data-role="resolucion-box" style="display:${it.resuelto?'block':'none'};margin-top:8px;padding-top:8px;border-top:1px dashed var(--concrete-line);">
+        <label>Explicación de la resolución</label>
+        <textarea data-field="resueltoTexto" placeholder="Describe cómo o por qué se resolvió este asunto…">${esc(it.resueltoTexto||'')}</textarea>
+        <p class="hint">La fecha de resolución se fijará automáticamente con la fecha de esta acta (${fmtDate(state.actaDraft.fecha)}) al cerrarla.</p>
+      </div>
+    </div>
+  `;
+}
+function readResponsablesFromNode(node){
+  return Array.from(node.querySelectorAll('[data-field="responsables"] input:checked')).map(chk=>chk.value);
+}
+function syncDraftFromDOM(){
+  const d = state.actaDraft;
+  d.numero = document.getElementById('actaNum').value.trim() || d.numero;
+  d.fecha = document.getElementById('actaFecha').value || d.fecha;
+  d.presentes = ROLES.filter(r=>document.getElementById('chk_'+r.code).checked).map(r=>r.code);
+  document.querySelectorAll('#tratadosList .asunto-item').forEach((node,i)=>{
+    d.asuntosTratados[i].texto = node.querySelector('[data-field="texto"]').value;
+    d.asuntosTratados[i].responsables = readResponsablesFromNode(node);
+    delete d.asuntosTratados[i].responsable; // formato antiguo, ya migrado a responsables[]
+    if(!d.asuntosTratados[i].codigo) d.asuntosTratados[i].codigo = d.numero+'-T'+String(i+1).padStart(2,'0');
+  });
+  document.querySelectorAll('#pendientesList .asunto-item').forEach((node,i)=>{
+    d.asuntosPendientes[i].texto = node.querySelector('[data-field="texto"]').value;
+    d.asuntosPendientes[i].responsables = readResponsablesFromNode(node);
+    delete d.asuntosPendientes[i].responsable;
+    d.asuntosPendientes[i].resuelto = node.querySelector('[data-field="resuelto"]').checked;
+    d.asuntosPendientes[i].resueltoTexto = node.querySelector('[data-field="resueltoTexto"]').value;
+    if(!d.asuntosPendientes[i].codigo) d.asuntosPendientes[i].codigo = d.numero+'-'+String(i+1).padStart(2,'0');
+  });
+}
+function bindActaForm(){
+  document.querySelectorAll('#pendientesList [data-field="resuelto"]').forEach(chk=>{
+    chk.addEventListener('change', ()=>{
+      const box = chk.closest('.asunto-item').querySelector('[data-role="resolucion-box"]');
+      if(box) box.style.display = chk.checked ? 'block' : 'none';
+    });
+  });
+  document.getElementById('addTratadoBtn').addEventListener('click', ()=>{
+    syncDraftFromDOM();
+    const i = state.actaDraft.asuntosTratados.length;
+    state.actaDraft.asuntosTratados.push({id:uid(),codigo:state.actaDraft.numero+'-T'+String(i+1).padStart(2,'0'),texto:'',responsables:[],fotos:[]});
+    render();
+  });
+  document.getElementById('addPendienteBtn').addEventListener('click', ()=>{
+    syncDraftFromDOM();
+    const i = state.actaDraft.asuntosPendientes.length;
+    state.actaDraft.asuntosPendientes.push({id:uid(),codigo:state.actaDraft.numero+'-'+String(i+1).padStart(2,'0'),texto:'',responsables:[],origen:'nuevo',resuelto:false,resueltoTexto:'',fechaResolucion:null,fotos:[]});
+    render();
+  });
+  document.querySelectorAll('[data-remove]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      syncDraftFromDOM();
+      const list = btn.dataset.remove==='tratados' ? state.actaDraft.asuntosTratados : state.actaDraft.asuntosPendientes;
+      list.splice(parseInt(btn.dataset.idx),1);
+      render();
+    });
+  });
+  bindFotosControls(document.getElementById('screen'), (listName)=>{
+    return listName==='tratados' ? state.actaDraft.asuntosTratados : state.actaDraft.asuntosPendientes;
+  }, ()=>{
+    syncDraftFromDOM();
+    render();
+  });
+  document.getElementById('cancelActaBtn').addEventListener('click', async ()=>{
+    const ok = await confirmDialog('Descartar acta', 'Se perderán los datos introducidos en esta acta.');
+    if(ok) goObraHome(state.obraId);
+  });
+  document.getElementById('closeActaBtn').addEventListener('click', async ()=>{
+    syncDraftFromDOM();
+    if(!state.actaDraft.asuntosTratados.length && !state.actaDraft.asuntosPendientes.length){
+      const ok = await confirmDialog('Acta vacía', 'No has añadido asuntos tratados ni pendientes. ¿Deseas cerrar el acta igualmente?');
+      if(!ok) return;
+    }
+    const sinExplicacion = state.actaDraft.asuntosPendientes.filter(p=>p.resuelto && !p.resueltoTexto.trim());
+    if(sinExplicacion.length){
+      const ok = await confirmDialog('Falta explicación de resolución', `Has marcado ${sinExplicacion.length} asunto(s) como resuelto(s) sin explicar cómo se resolvieron. ¿Cerrar igualmente?`);
+      if(!ok) return;
+    }
+    showLoading('Generando PDF…');
+    try{
+      // Fija fecha de apertura (si es la primera vez que se registra) y fecha/explicación
+      // de resolución (con la fecha de esta acta) para poder medir tiempos de gestión.
+      state.actaDraft.asuntosPendientes.forEach(p=>{
+        if(!p.fechaApertura) p.fechaApertura = state.actaDraft.fecha;
+        if(p.resuelto){
+          if(!p.fechaResolucion) p.fechaResolucion = state.actaDraft.fecha;
+        } else {
+          p.fechaResolucion = null;
+          p.resueltoTexto = '';
+        }
+      });
+      state.actaDraft.cerrada = true;
+      state.actaDraft.fechaCierre = new Date().toISOString();
+      state.currentObraData.actas.push(state.actaDraft);
+      await saveObraData(state.obraId, state.currentObraData);
+      await generateActaPDF(state.currentObraData.obra, state.actaDraft, state.currentObraData.actas.filter(a=>a.cerrada));
+      // Si hay un Excel local vinculado, se escribe directamente ahí (sin descargar
+      // una copia nueva); si no, se mantiene la descarga automática de siempre.
+      let excelMsg = 'Excel actualizado';
+      if(localFileHandles[state.obraId]){
+        const wrote = await writeExcelToLinkedFile(state.obraId, state.currentObraData.obra, state.currentObraData.actas);
+        excelMsg = wrote ? 'Excel local actualizado (' + localFileHandles[state.obraId].name + ')' : 'Excel (no se pudo escribir en el archivo local)';
+      } else {
+        await exportExcelForObra(state.currentObraData.obra, state.currentObraData.actas, {silent:true});
+      }
+      const synced = await syncProjectToSheet(state.currentObraData.obra, state.currentObraData.actas, {silent:true});
+      const dropboxOk = await uploadExcelToDropbox(state.currentObraData.obra, state.currentObraData.actas, {silent:true});
+      hideLoading();
+      showToast('Acta cerrada: PDF y ' + excelMsg + (synced ? ' · Enviado a Sheets' : '') + (dropboxOk ? ' · Subido a Dropbox' : ''));
+      goObraHome(state.obraId);
+    }catch(e){
+      console.error(e); hideLoading();
+      showToast('Error al generar el PDF');
+    }
+  });
+}
+
+/* ==========================================================
+   SCREEN: Registro de actas
+   ========================================================== */
+function renderRegistro(){
+  const cerradas = state.currentObraData.actas.filter(a=>a.cerrada).slice().reverse();
+  if(!cerradas.length){
+    return `<div class="empty-state tick-frame"><div class="icon">📚</div><p>Aún no hay actas cerradas.</p></div>`;
+  }
+  return `
+    <p class="screen-sub">${cerradas.length} acta${cerradas.length===1?'':'s'} cerrada${cerradas.length===1?'':'s'} para este proyecto.</p>
+    ${cerradas.map((a,i)=>`
+      <div class="acta-row" data-id="${a.id}">
+        <div class="sello" style="width:40px;height:40px;flex-shrink:0;"><div class="sello-text" style="font-size:6.5px;">OK</div></div>
+        <div class="acta-badge">${a.numero}</div>
+        <div class="acta-meta">
+          <p class="acta-date">${fmtDate(a.fecha)}</p>
+          <p class="acta-sub">${(a.asuntosTratados||[]).length} tratados · ${(a.asuntosPendientes||[]).filter(p=>!p.resuelto).length} pendientes</p>
+        </div>
+        <div class="acta-chevron">›</div>
+      </div>
+    `).join('')}
+  `;
+}
+function bindRegistro(){
+  document.querySelectorAll('.acta-row[data-id]').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const acta = state.currentObraData.actas.find(a=>a.id===row.dataset.id);
+      goActaView(acta);
+    });
+  });
+}
+
+/* ==========================================================
+   SCREEN: Vista de una acta cerrada
+   ========================================================== */
+function fotosViewOnlyHTML(fotos){
+  fotos = fotos || [];
+  if(!fotos.length) return '';
+  return `
+    <div class="fotos-thumbs" style="margin-top:8px;">
+      ${fotos.map(f=>`
+        <div class="foto-thumb view-only" data-foto-id="${f.id}">
+          <img data-photo-src="${f.id}" src="" alt="foto adjunta">
+          ${f.annotated ? '<span class="foto-annotated-badge">ANOTADA</span>' : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function renderActaView(){
+  const a = state.viewActa, o = state.currentObraData.obra;
+  return `
+    <div class="card tick-frame">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+        <div>
+          <p class="section-label" style="margin-bottom:4px;">Acta ${a.numero}</p>
+          <p style="margin:0;font-size:13px;color:var(--ink-soft);">${fmtDate(a.fecha)}</p>
+        </div>
+        <div class="sello"><div class="sello-text">ACTA<br>CERRADA</div></div>
+      </div>
+      <p style="font-size:12.5px;color:var(--concrete);margin:0;">Presentes: ${a.presentes.map(c=>`(${c})`).join(' ')||'—'}</p>
+    </div>
+    <p class="section-label">Asuntos tratados</p>
+    ${(a.asuntosTratados||[]).map((it,i)=>`
+      <div class="asunto-item">
+        <div class="asunto-head"><span class="asunto-code mono">${it.codigo || ('Asunto '+(i+1))}</span><span class="carried-tag" style="background:var(--concrete);">${respArray(it).length?respArray(it).join(', '):'—'}</span></div>
+        <p style="font-size:13.5px;line-height:1.5;margin:0;white-space:pre-wrap;">${esc(it.texto)}</p>
+        ${fotosViewOnlyHTML(it.fotos)}
+      </div>
+    `).join('') || `<p class="hint">Sin asuntos tratados registrados.</p>`}
+    <p class="section-label">Asuntos pendientes</p>
+    ${(a.asuntosPendientes||[]).map((it)=>`
+      <div class="asunto-item">
+        <div class="asunto-head">
+          <span class="asunto-code mono">${it.codigo}</span>
+          <span class="status-pill ${it.resuelto?'status-cerrada':'status-abierta'}">${it.resuelto?'Resuelto':'Pendiente'}</span>
+        </div>
+        ${it.fechaApertura ? `<p class="hint" style="margin:0 0 4px;">Abierto el ${fmtDate(it.fechaApertura)}</p>` : ''}
+        <p style="font-size:13.5px;line-height:1.5;margin:0 0 4px;white-space:pre-wrap;">${esc(it.texto)}</p>
+        <p class="hint">Responsables: ${respLabelLine(it)}</p>
+        ${fotosViewOnlyHTML(it.fotos)}
+        ${it.resuelto ? `
+          <div style="background:var(--resolved-bg);border-radius:var(--radius);padding:8px 10px;margin-top:8px;">
+            <p style="font-size:11px;font-weight:700;color:var(--resolved);margin:0 0 3px;text-transform:uppercase;letter-spacing:0.04em;">Resuelto${it.fechaResolucion?' el '+fmtDate(it.fechaResolucion):''}</p>
+            <p style="font-size:12.5px;color:var(--ink-soft);margin:0;white-space:pre-wrap;">${esc(it.resueltoTexto||'Sin explicación adicional.')}</p>
+          </div>
+        ` : ''}
+      </div>
+    `).join('') || `<p class="hint">Sin asuntos pendientes registrados.</p>`}
+    <button class="btn btn-outline btn-block" id="regenPdfBtn" style="margin-top:10px;">Descargar PDF de esta acta</button>
+  `;
+}
+function bindActaView(){
+  hydratePhotoThumbnails(document.getElementById('screen'));
+  document.querySelectorAll('#screen .foto-thumb.view-only img').forEach(img=>{
+    img.addEventListener('click', ()=>{ if(img.src) openPhotoViewer(img.src); });
+  });
+  document.getElementById('regenPdfBtn').addEventListener('click', async ()=>{
+    showLoading('Generando PDF…');
+    try{
+      await generateActaPDF(state.currentObraData.obra, state.viewActa, state.currentObraData.actas.filter(a=>a.cerrada));
+      hideLoading(); showToast('PDF generado');
+    }catch(e){ console.error(e); hideLoading(); showToast('Error al generar el PDF'); }
+  });
+}
+
+/* ==========================================================
+   FOTOS: captura, compresión, almacenamiento y anotación
+   ========================================================== */
+const PHOTO_MAX_DIM = 1400;
+const PHOTO_QUALITY = 0.72;
+
+// Lee un archivo de imagen (cámara o galería) y lo comprime a un dataURL JPEG
+// manejable, devolviendo también sus dimensiones reales en píxeles.
+function compressImageFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = ()=>reject(new Error('No se pudo leer el archivo'));
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onerror = ()=>reject(new Error('No se pudo decodificar la imagen'));
+      img.onload = ()=>{
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if(w > PHOTO_MAX_DIM || h > PHOTO_MAX_DIM){
+          if(w >= h){ h = Math.round(h * PHOTO_MAX_DIM / w); w = PHOTO_MAX_DIM; }
+          else { w = Math.round(w * PHOTO_MAX_DIM / h); h = PHOTO_MAX_DIM; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', PHOTO_QUALITY), width:w, height:h });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function storageDelete(key){
+  delete memCache[key];
+  try{ await idbDel(key); }catch(e){ /* clave ya inexistente o fallo silencioso */ }
+}
+
+// Cada foto se guarda en su propia clave (no dentro del bloque grande del
+// proyecto) para no acercarse al límite de tamaño por clave, y porque no
+// siempre se actualiza junto con el resto de datos del acta.
+async function savePhotoRecord(dataUrl, width, height){
+  const id = uid();
+  await storageSet('photo:'+id, { dataUrl, width, height });
+  return id;
+}
+async function loadPhotoRecord(id){
+  return await storageGet('photo:'+id);
+}
+async function overwritePhotoRecord(id, dataUrl, width, height){
+  await storageSet('photo:'+id, { dataUrl, width, height });
+}
+async function deletePhotoRecord(id){
+  await storageDelete('photo:'+id);
+  await storageDelete('photo:'+id+':orig');
+}
+
+// Rellena las miniaturas <img data-photo-src="id"> ya insertadas en el DOM.
+async function hydratePhotoThumbnails(root){
+  const scope = root || document;
+  const imgs = scope.querySelectorAll('img[data-photo-src]');
+  for(const img of imgs){
+    const id = img.getAttribute('data-photo-src');
+    if(img.dataset.hydrated === id) continue;
+    const rec = await loadPhotoRecord(id);
+    if(rec && rec.dataUrl){ img.src = rec.dataUrl; img.dataset.hydrated = id; }
+  }
+}
+
+function fotosThumbsHTML(fotos, idx, listName){
+  fotos = fotos || [];
+  return `
+    <div class="fotos-block">
+      <label>Fotos</label>
+      <div class="fotos-thumbs" data-fotos-idx="${idx}" data-fotos-list="${listName}">
+        ${fotos.map(f=>`
+          <div class="foto-thumb" data-foto-id="${f.id}">
+            <img data-photo-src="${f.id}" src="" alt="foto adjunta">
+            <div class="foto-thumb-actions">
+              <button type="button" class="foto-annotate-btn" data-foto-id="${f.id}" title="Anotar">✏️</button>
+              <button type="button" class="foto-remove-btn" data-foto-id="${f.id}" title="Quitar">✕</button>
+            </div>
+            ${f.annotated ? '<span class="foto-annotated-badge">ANOTADA</span>' : ''}
+          </div>
+        `).join('')}
+        <label class="foto-add-btn">
+          📷
+          <input type="file" accept="image/*" capture="environment" class="foto-file-input" data-fotos-idx="${idx}" data-fotos-list="${listName}" hidden>
+        </label>
+      </div>
+    </div>
+  `;
+}
+
+// Conecta los controles de fotos (añadir / anotar / quitar) dentro de un
+// contenedor ya renderizado. getList(listName) debe devolver el array
+// asuntosTratados o asuntosPendientes vivo del borrador actual.
+function bindFotosControls(root, getList, onChanged){
+  hydratePhotoThumbnails(root);
+  root.querySelectorAll('.foto-file-input').forEach(input=>{
+    input.addEventListener('change', async ()=>{
+      const file = input.files[0];
+      if(!file) return;
+      const idx = parseInt(input.dataset.fotosIdx);
+      const listName = input.dataset.fotosList;
+      showLoading('Procesando foto…');
+      try{
+        const { dataUrl, width, height } = await compressImageFile(file);
+        const id = await savePhotoRecord(dataUrl, width, height);
+        const list = getList(listName);
+        if(!list[idx].fotos) list[idx].fotos = [];
+        list[idx].fotos.push({ id, annotated:false, addedAt:new Date().toISOString() });
+        hideLoading();
+        onChanged();
+      }catch(e){
+        console.error(e); hideLoading(); showToast('No se pudo añadir la foto');
+      }
+    });
+  });
+  root.querySelectorAll('.foto-annotate-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.fotoId;
+      const rec = await loadPhotoRecord(id);
+      if(!rec){ showToast('No se pudo cargar la foto'); return; }
+      const result = await openAnnotator(rec.dataUrl);
+      if(!result) return;
+      showLoading('Guardando anotación…');
+      try{
+        // Conserva el original la primera vez que se anota, por si se quiere recuperar.
+        const origExists = await loadPhotoRecord(id+':orig');
+        if(!origExists){ await storageSet('photo:'+id+':orig', rec); }
+        await overwritePhotoRecord(id, result.dataUrl, result.width, result.height);
+        // marca la foto como anotada en el borrador/objeto correspondiente
+        const container = btn.closest('[data-fotos-list]');
+        const idx = parseInt(container.dataset.fotosIdx);
+        const listName = container.dataset.fotosList;
+        const list = getList(listName);
+        const foto = (list[idx].fotos||[]).find(f=>f.id===id);
+        if(foto) foto.annotated = true;
+        // actualiza la miniatura en el sitio, sin perder el resto del formulario
+        const thumbImg = btn.closest('.foto-thumb').querySelector('img');
+        thumbImg.src = result.dataUrl;
+        thumbImg.dataset.hydrated = id;
+        let badge = btn.closest('.foto-thumb').querySelector('.foto-annotated-badge');
+        if(!badge){
+          badge = document.createElement('span');
+          badge.className = 'foto-annotated-badge';
+          badge.textContent = 'ANOTADA';
+          btn.closest('.foto-thumb').appendChild(badge);
+        }
+        hideLoading();
+      }catch(e){
+        console.error(e); hideLoading(); showToast('No se pudo guardar la anotación');
+      }
+    });
+  });
+  root.querySelectorAll('.foto-remove-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.fotoId;
+      const container = btn.closest('[data-fotos-list]');
+      const idx = parseInt(container.dataset.fotosIdx);
+      const listName = container.dataset.fotosList;
+      const list = getList(listName);
+      list[idx].fotos = (list[idx].fotos||[]).filter(f=>f.id!==id);
+      await deletePhotoRecord(id);
+      onChanged();
+    });
+  });
+  // vista rápida a pantalla completa al tocar una miniatura (fuera de los botones)
+  root.querySelectorAll('.foto-thumb img').forEach(img=>{
+    img.addEventListener('click', ()=>{
+      if(img.src) openPhotoViewer(img.src);
+    });
+  });
+}
+
+function openPhotoViewer(src){
+  document.getElementById('photoViewerImg').src = src;
+  document.getElementById('photoViewerOverlay').classList.add('show');
+}
+document.getElementById('photoViewerClose').addEventListener('click', ()=>{
+  document.getElementById('photoViewerOverlay').classList.remove('show');
+  document.getElementById('photoViewerImg').src = '';
+});
+document.getElementById('photoViewerOverlay').addEventListener('click', (e)=>{
+  if(e.target.id==='photoViewerOverlay'){
+    document.getElementById('photoViewerOverlay').classList.remove('show');
+    document.getElementById('photoViewerImg').src = '';
+  }
+});
+
+/* ---------------------- EDITOR DE ANOTACIONES ---------------------- */
+// Permite dibujar a mano alzada sobre una foto (para señalar o resaltar algo
+// en obra, un plano o una captura). Devuelve {dataUrl,width,height} con la
+// imagen ya combinada, o null si se cancela.
+function openAnnotator(sourceDataUrl){
+  return new Promise((resolve)=>{
+    const overlay = document.getElementById('annotatorOverlay');
+    const canvas = document.getElementById('annotatorCanvas');
+    const ctx = canvas.getContext('2d');
+    const wrap = overlay.querySelector('.annotator-canvas-wrap');
+    let strokes = [];       // trazos ya confirmados
+    let currentStroke = null;
+    let color = overlay.querySelector('.annotator-swatch.active').dataset.color;
+    let baseImg = new Image();
+
+    function redraw(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(baseImg, 0, 0, canvas.width, canvas.height);
+      const allStrokes = currentStroke ? strokes.concat([currentStroke]) : strokes;
+      allStrokes.forEach(st=>{
+        if(st.points.length < 2) return;
+        ctx.strokeStyle = st.color;
+        ctx.lineWidth = Math.max(3, canvas.width*0.006);
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(st.points[0].x, st.points[0].y);
+        for(let i=1;i<st.points.length;i++) ctx.lineTo(st.points[i].x, st.points[i].y);
+        ctx.stroke();
+      });
+    }
+    function pointFromEvent(evt){
+      const rect = canvas.getBoundingClientRect();
+      const cx = (evt.touches ? evt.touches[0].clientX : evt.clientX) - rect.left;
+      const cy = (evt.touches ? evt.touches[0].clientY : evt.clientY) - rect.top;
+      return { x: cx * (canvas.width/rect.width), y: cy * (canvas.height/rect.height) };
+    }
+    function onDown(evt){
+      evt.preventDefault();
+      currentStroke = { color, points:[pointFromEvent(evt)] };
+      redraw();
+    }
+    function onMove(evt){
+      if(!currentStroke) return;
+      evt.preventDefault();
+      currentStroke.points.push(pointFromEvent(evt));
+      redraw();
+    }
+    function onUp(){
+      if(!currentStroke) return;
+      strokes.push(currentStroke);
+      currentStroke = null;
+    }
+
+    baseImg.onload = ()=>{
+      canvas.width = baseImg.naturalWidth;
+      canvas.height = baseImg.naturalHeight;
+      redraw();
+    };
+    baseImg.src = sourceDataUrl;
+
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+
+    overlay.querySelectorAll('.annotator-swatch').forEach(sw=>{
+      sw.onclick = ()=>{
+        overlay.querySelectorAll('.annotator-swatch').forEach(s=>s.classList.remove('active'));
+        sw.classList.add('active');
+        color = sw.dataset.color;
+      };
+    });
+    const undoBtn = document.getElementById('annotatorUndo');
+    const clearBtn = document.getElementById('annotatorClear');
+    const cancelBtn = document.getElementById('annotatorCancel');
+    const saveBtn = document.getElementById('annotatorSave');
+
+    undoBtn.onclick = ()=>{ strokes.pop(); redraw(); };
+    clearBtn.onclick = ()=>{ strokes = []; redraw(); };
+
+    function cleanup(){
+      overlay.classList.remove('show');
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      undoBtn.onclick = null; clearBtn.onclick = null;
+      cancelBtn.onclick = null; saveBtn.onclick = null;
+    }
+    cancelBtn.onclick = ()=>{ cleanup(); resolve(null); };
+    saveBtn.onclick = ()=>{
+      const dataUrl = canvas.toDataURL('image/jpeg', PHOTO_QUALITY);
+      const width = canvas.width, height = canvas.height;
+      cleanup();
+      resolve({ dataUrl, width, height });
+    };
+
+    overlay.classList.add('show');
+  });
+}
+
+/* ==========================================================
+   UTILIDADES
+   ========================================================== */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(iso){
+  if(!iso) return '—';
+  const d = new Date(iso+(iso.length<=10?'T00:00:00':''));
+  return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+
+/* ==========================================================
+   GENERACIÓN DE PDF (jsPDF) — multipágina + registro histórico
+   ========================================================== */
+async function generateActaPDF(obra, acta, actasCerradas){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'a4'});
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 48;
+  const contentW = pageW - margin*2;
+  const BLUEPRINT = [27,58,92];
+  const SAFETY = [217,98,43];
+  const INK = [31,35,32];
+  const CONCRETE = [140,135,125];
+  let y = margin;
+  let pageNum = 1;
+
+  function newPage(){
+    doc.addPage();
+    pageNum++;
+    y = margin;
+    drawRunningHeader();
+  }
+  function ensureSpace(h){
+    if(y + h > pageH - margin - 24){ newPage(); }
+  }
+  function drawRunningHeader(){
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...CONCRETE);
+    doc.text(('ACTA '+acta.numero+' — '+(obra.obra||'')).toUpperCase(), margin, 28);
+    doc.text('Pág. '+pageNum, pageW-margin, 28, {align:'right'});
+    doc.setDrawColor(...CONCRETE); doc.setLineWidth(0.5);
+    doc.line(margin, 34, pageW-margin, 34);
+    y = 50;
+  }
+  function footer(){
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...CONCRETE);
+    doc.text('Documento generado automáticamente — Actas de Visita de Obra', margin, pageH-20);
+  }
+
+  // ---------- Página 1: Cabecera ----------
+  doc.setFillColor(...BLUEPRINT);
+  doc.rect(0,0,pageW,64,'F');
+  doc.setFillColor(...SAFETY);
+  doc.rect(0,64,pageW,3,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('ACTA DE VISITA DE DIRECCIÓN DE EJECUCIÓN DE OBRA', margin, 32, {maxWidth:contentW});
+  doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
+  doc.text(obra.obra||'', margin, 50);
+  y = 86;
+
+  doc.setTextColor(...INK);
+  doc.setFont('helvetica','bold'); doc.setFontSize(10);
+  doc.text('Acta nº: '+acta.numero, margin, y);
+  doc.text('Fecha: '+fmtDate(acta.fecha), pageW-margin, y, {align:'right'});
+  y += 10;
+  doc.setDrawColor(...CONCRETE); doc.line(margin,y,pageW-margin,y); y+=16;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+  const sitoLines = doc.splitTextToSize('Sito en: '+(obra.direccion||'—'), contentW);
+  doc.text(sitoLines, margin, y); y += sitoLines.length*12 + 10;
+
+  // Tabla de presentes / datos de obra
+  const rows = [
+    ['(P)', 'PROPIEDAD', obra.propiedad],
+    ['(DO)', 'DIRECTOR DE OBRA', obra.directorObra],
+    ['(DEO)', 'D. DE EJECUCIÓN', obra.deo],
+    ['(C)', 'CONTRATA', obra.contrata],
+    ['(CO)', 'COORDINADOR S Y S', obra.coordinadorSyS],
+    ['(R)', 'RECURSO PREVENTIVO', obra.recursoPreventivo],
+  ];
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CONCRETE);
+  doc.text('PRESENTE', pageW-margin-15, y, {align:'center'});
+  y += 18; // espacio para que la cabecera "PRESENTE" no se amontone con la primera casilla
+  rows.forEach(r=>{
+    const present = acta.presentes.includes(r[0].replace(/[()]/g,''));
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...BLUEPRINT);
+    doc.text(r[0], margin, y);
+    doc.setFont('helvetica','bold'); doc.setTextColor(...INK);
+    doc.text(r[1], margin+34, y);
+    doc.setFont('helvetica','normal');
+    const valLines = doc.splitTextToSize(r[2]||'—', contentW-190);
+    doc.text(valLines, margin+150, y);
+    // checkbox
+    doc.setDrawColor(...INK); doc.rect(pageW-margin-20, y-8, 10, 10);
+    if(present){ doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('X', pageW-margin-17.5, y-0.5); }
+    y += Math.max(14, valLines.length*11 + 4);
+  });
+  y += 6;
+
+  function drawSectionTitle(title){
+    ensureSpace(26);
+    doc.setFillColor(...BLUEPRINT);
+    doc.rect(margin, y-11, contentW, 20, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
+    doc.text(title, margin+8, y+3);
+    y += 24;
+  }
+  const RESOLVED = [63,107,77], RESOLVED_BG = [228,238,230];
+  function drawAsuntoBlock(codigo, texto, responsables, extraTag, meta){
+    meta = meta || {};
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...BLUEPRINT);
+    const codeLine = codigo + (extraTag? '   ['+extraTag+']':'');
+    ensureSpace(16);
+    doc.text(codeLine, margin, y);
+    if(responsables && responsables.length){
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...SAFETY);
+      const label = (responsables.length>1?'Responsables: ':'Responsable: ') + responsables.join(', ');
+      doc.text(label, pageW-margin, y, {align:'right'});
+    }
+    y += 12;
+    if(meta.fechaApertura){
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.8); doc.setTextColor(...CONCRETE);
+      ensureSpace(11);
+      doc.text('Abierto el '+fmtDate(meta.fechaApertura), margin, y);
+      y += 11;
+    }
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.3); doc.setTextColor(...INK);
+    const lines = doc.splitTextToSize(texto||'—', contentW-6);
+    lines.forEach(line=>{
+      ensureSpace(12.5);
+      doc.text(line, margin+4, y);
+      y += 12.5;
+    });
+    if(meta.resolucion){
+      const noteLines = doc.splitTextToSize(
+        'RESUELTO'+(meta.resolucion.fecha?(' el '+fmtDate(meta.resolucion.fecha)):'')+': '+(meta.resolucion.texto||'Sin explicación adicional.'),
+        contentW-16
+      );
+      const boxH = noteLines.length*10.5 + 10;
+      ensureSpace(boxH+6);
+      y += 6;
+      doc.setFillColor(...RESOLVED_BG);
+      doc.rect(margin, y-9, contentW, boxH, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.8); doc.setTextColor(...RESOLVED);
+      doc.text(noteLines, margin+6, y+2);
+      y += boxH;
+    }
+    if(meta.photos && meta.photos.length){
+      y += 6;
+      const maxW = Math.min(240, contentW-8);
+      const maxH = 175;
+      meta.photos.forEach(ph=>{
+        let w = maxW, h = w * (ph.height/ph.width);
+        if(h > maxH){ h = maxH; w = h * (ph.width/ph.height); }
+        ensureSpace(h+10);
+        doc.setDrawColor(...CONCRETE); doc.setLineWidth(0.6);
+        doc.rect(margin+4, y, w, h);
+        try{ doc.addImage(ph.dataUrl, 'JPEG', margin+4, y, w, h); }catch(e){ /* imagen no soportada, se omite */ }
+        y += h + 10;
+      });
+    }
+    y += 10;
+    doc.setDrawColor(220,215,200); doc.setLineWidth(0.4);
+    ensureSpace(4);
+    doc.line(margin, y, pageW-margin, y);
+    y += 10;
+  }
+
+  // Carga las fotos guardadas de un asunto (ya comprimidas) para insertarlas en el PDF.
+  async function loadAsuntoPhotos(fotos){
+    if(!fotos || !fotos.length) return [];
+    const out = [];
+    for(const f of fotos){
+      const rec = await loadPhotoRecord(f.id);
+      if(rec && rec.dataUrl) out.push(rec);
+    }
+    return out;
+  }
+
+  drawSectionTitle('ASUNTOS TRATADOS');
+  if(!acta.asuntosTratados.length){
+    doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(...CONCRETE);
+    doc.text('Sin asuntos tratados registrados en esta visita.', margin, y); y+=16;
+  } else {
+    for(let i=0;i<acta.asuntosTratados.length;i++){
+      const it = acta.asuntosTratados[i];
+      const photos = await loadAsuntoPhotos(it.fotos);
+      drawAsuntoBlock(it.codigo || ('Asunto '+(i+1)), it.texto, respArray(it), null, { photos });
+    }
+  }
+
+  drawSectionTitle('ASUNTOS PENDIENTES');
+  if(!acta.asuntosPendientes.length){
+    doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(...CONCRETE);
+    doc.text('Sin asuntos pendientes.', margin, y); y+=16;
+  } else {
+    for(const it of acta.asuntosPendientes){
+      const photos = await loadAsuntoPhotos(it.fotos);
+      drawAsuntoBlock(
+        it.codigo, it.texto, respArray(it),
+        (!it.resuelto && it.origen==='anterior') ? 'ABIERTO DESDE ACTA ANTERIOR' : null,
+        { fechaApertura: it.fechaApertura, resolucion: it.resuelto ? {texto: it.resueltoTexto, fecha: it.fechaResolucion} : null, photos }
+      );
+    }
+  }
+
+  // Firma de acta
+  ensureSpace(110);
+  drawSectionTitle('FIRMA DE ACTA');
+  doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(...CONCRETE);
+  doc.text('Este documento debe quedar firmado antes de su envío a los asistentes.', margin, y);
+  y += 16;
+
+  // Bloque destacado: firma de quien redacta y cierra el acta (D. Ejecución de Obra)
+  if(obra.deo){
+    ensureSpace(78);
+    doc.setDrawColor(...BLUEPRINT); doc.setLineWidth(1);
+    doc.rect(margin, y, contentW, 66);
+    doc.setFillColor(...BLUEPRINT);
+    doc.rect(margin, y, contentW, 16, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(255,255,255);
+    doc.text('FIRMA — D. DE EJECUCIÓN DE OBRA (redacta y cierra el acta)', margin+6, y+11);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...INK);
+    doc.text(obra.deo, margin+6, y+30);
+    doc.setDrawColor(...CONCRETE); doc.setLineWidth(0.6);
+    doc.line(margin+6, y+56, margin+contentW-6, y+56);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...CONCRETE);
+    doc.text('Firma', margin+6, y+63);
+    doc.text('Fecha', margin+contentW-60, y+63);
+    y += 78;
+  }
+
+  const signers = [];
+  if(obra.propiedad) signers.push(['Propiedad', obra.propiedad]);
+  if(obra.contrata) signers.push(['Contrata', obra.contrata]);
+  if(obra.directorObra) signers.push(['Director de Obra', obra.directorObra]);
+  const colW = contentW/2 - 10;
+  signers.forEach((s,i)=>{
+    ensureSpace(64);
+    const col = i%2, bx = margin + (col*(colW+20));
+    if(col===0) y = y; // no-op, keeps row alignment readable
+    doc.setDrawColor(...CONCRETE); doc.setLineWidth(0.6);
+    doc.rect(bx, y, colW, 50);
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...INK);
+    doc.text(s[0], bx+6, y+13);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...CONCRETE);
+    const nameLines = doc.splitTextToSize(s[1], colW-12);
+    doc.text(nameLines[0]||'', bx+6, y+24);
+    doc.line(bx+6, y+42, bx+colW-6, y+42);
+    doc.setFontSize(7); doc.text('Firma', bx+6, y+48);
+    if(col===1 || i===signers.length-1){ y += 58; }
+  });
+
+  // ---------- Página final: Registro histórico de actas cerradas ----------
+  newPage();
+  drawSectionTitle('REGISTRO DE ACTAS CERRADAS — ' + (obra.obra||''));
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...CONCRETE);
+  doc.text('Histórico completo de actas de visita cerradas para este proyecto, incluida la presente.', margin, y);
+  y += 18;
+
+  // table header
+  function tableHeader(){
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(255,255,255);
+    doc.setFillColor(...BLUEPRINT);
+    doc.rect(margin, y-10, contentW, 18, 'F');
+    doc.text('ACTA', margin+6, y+2);
+    doc.text('FECHA', margin+70, y+2);
+    doc.text('TRATADOS', margin+150, y+2);
+    doc.text('PENDIENTES ABIERTOS', margin+240, y+2);
+    y += 18;
+  }
+  tableHeader();
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...INK);
+  actasCerradas.forEach((a,i)=>{
+    ensureSpace(16);
+    if(y===50){ tableHeader(); } // reprint header if we just started a new page
+    if(i%2===1){ doc.setFillColor(246,243,235); doc.rect(margin,y-9,contentW,15,'F'); }
+    doc.text(a.numero, margin+6, y);
+    doc.text(fmtDate(a.fecha), margin+70, y);
+    doc.text(String((a.asuntosTratados||[]).length), margin+165, y);
+    doc.text(String((a.asuntosPendientes||[]).filter(p=>!p.resuelto).length), margin+275, y);
+    y += 15;
+  });
+
+  // footers + page numbers pass
+  const totalPages = doc.internal.getNumberOfPages();
+  for(let p=1;p<=totalPages;p++){
+    doc.setPage(p);
+    footer();
+  }
+
+  const fname = 'Acta_'+acta.numero+'_'+(obra.obra||'obra').replace(/[^a-z0-9]+/gi,'_')+'.pdf';
+  doc.save(fname);
+}
+
+/* ==========================================================
+   EXPORTACIÓN EXCEL — un libro con una hoja por proyecto
+   ========================================================== */
+function daysBetweenDates(a,b){
+  if(!a||!b) return null;
+  return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000);
+}
+
+// Construye la matriz de filas (AOA) de la hoja Excel de un proyecto:
+// datos de obra, resumen de actas, rendimiento en pendientes y detalle.
+// Se usa tanto en la exportaci\u00f3n manual de "todos los proyectos" como en la
+// actualizaci\u00f3n autom\u00e1tica del Excel del proyecto al cerrar cada acta.
+function buildObraSheetAOA(obra, cerradas){
+  const todayISO = new Date().toISOString().slice(0,10);
+  const uniquePend = {};
+  cerradas.forEach(a=> (a.asuntosPendientes||[]).forEach(p=>{ uniquePend[p.codigo] = p; }));
+  const pendList = Object.values(uniquePend).sort((a,b)=> (a.codigo||'').localeCompare(b.codigo||''));
+  const resueltos = pendList.filter(p=>p.resuelto);
+  const abiertos = pendList.filter(p=>!p.resuelto);
+  const resolTimes = resueltos.map(p=>daysBetweenDates(p.fechaApertura,p.fechaResolucion)).filter(d=>d!=null);
+  const avgResol = resolTimes.length ? (resolTimes.reduce((a,b)=>a+b,0)/resolTimes.length).toFixed(1) : '\u2014';
+  const openTimes = abiertos.map(p=>daysBetweenDates(p.fechaApertura,todayISO)).filter(d=>d!=null);
+  const avgOpen = openTimes.length ? (openTimes.reduce((a,b)=>a+b,0)/openTimes.length).toFixed(1) : '\u2014';
+
+  const header = [
+    ['OBRA', obra.obra||''],
+    ['DIRECCI\u00d3N', obra.direccion||''],
+    ['PROPIEDAD (P)', obra.propiedad||''],
+    ['DIRECTOR DE OBRA (DO)', obra.directorObra||''],
+    ['D. EJECUCI\u00d3N (DEO)', obra.deo||''],
+    ['CONTRATA (C)', obra.contrata||''],
+    ['COORDINADOR S Y S (CO)', obra.coordinadorSyS||''],
+    ['RECURSO PREVENTIVO (R)', obra.recursoPreventivo||''],
+    ['\u00daLTIMA ACTUALIZACI\u00d3N', new Date().toLocaleString('es-ES')],
+    [],
+    ['ACTA', 'FECHA', 'PRESENTES', 'N\u00ba ASUNTOS TRATADOS', 'N\u00ba PENDIENTES ABIERTOS', 'N\u00ba PENDIENTES RESUELTOS'],
+  ];
+  cerradas.forEach(a=>{
+    header.push([
+      a.numero,
+      fmtDate(a.fecha),
+      (a.presentes||[]).join(', '),
+      (a.asuntosTratados||[]).length,
+      (a.asuntosPendientes||[]).filter(p=>!p.resuelto).length,
+      (a.asuntosPendientes||[]).filter(p=>p.resuelto).length,
+    ]);
+  });
+
+  header.push([]);
+  header.push(['RENDIMIENTO EN LA GESTI\u00d3N DE PENDIENTES']);
+  header.push(['Total de asuntos pendientes registrados', pendList.length]);
+  header.push(['Resueltos', resueltos.length]);
+  header.push(['Abiertos actualmente', abiertos.length]);
+  header.push(['D\u00edas promedio hasta la resoluci\u00f3n (resueltos)', avgResol]);
+  header.push(['D\u00edas promedio en abierto (pendientes actuales)', avgOpen]);
+
+  header.push([]);
+  header.push(['DETALLE DE ASUNTOS TRATADOS']);
+  header.push(['ACTA','C\u00d3DIGO','ASUNTO','RESPONSABLE','N\u00ba FOTOS']);
+  cerradas.forEach(a=>{
+    (a.asuntosTratados||[]).forEach(t=>{
+      header.push([a.numero, t.codigo||'', t.texto, respArray(t).join(', '), (t.fotos||[]).length]);
+    });
+  });
+
+  header.push([]);
+  header.push(['DETALLE DE ASUNTOS PENDIENTES (estado final por asunto)']);
+  header.push(['C\u00d3DIGO','ASUNTO','RESPONSABLE','ESTADO','FECHA APERTURA','FECHA RESOLUCI\u00d3N','D\u00cdAS DE GESTI\u00d3N','EXPLICACI\u00d3N DE LA RESOLUCI\u00d3N','N\u00ba FOTOS']);
+  pendList.forEach(p=>{
+    const dias = p.resuelto ? daysBetweenDates(p.fechaApertura,p.fechaResolucion) : daysBetweenDates(p.fechaApertura,todayISO);
+    header.push([
+      p.codigo, p.texto, respArray(p).join(', '), p.resuelto?'Resuelto':'Pendiente',
+      p.fechaApertura?fmtDate(p.fechaApertura):'', p.fechaResolucion?fmtDate(p.fechaResolucion):'',
+      dias!=null?dias:'', p.resuelto?(p.resueltoTexto||''):'', (p.fotos||[]).length
+    ]);
+  });
+  return header;
+}
+
+function sheetNameForExcelJS(name, workbook){
+  let sheetName = (name||'Obra').replace(/[\\\/\?\*\[\]:]/g,'').slice(0,31) || 'Obra';
+  let base = sheetName, n=1;
+  while(workbook.worksheets.some(ws=>ws.name===sheetName)){ sheetName = (base.slice(0,28)+'_'+n); n++; }
+  return sheetName;
+}
+
+/* ---------------------- COLORES (mismos tokens que la app y el PDF) ---------------------- */
+const XL_BLUEPRINT = 'FF1B3A5C';
+const XL_BLUEPRINT_LIGHT = 'FF2F5C82';
+const XL_SAFETY = 'FFD9622B';
+const XL_INK = 'FF1F2320';
+const XL_CONCRETE = 'FF8C877D';
+const XL_PAPER = 'FFFAF7F0';
+const XL_ZEBRA = 'FFF1ECDF';
+const XL_BORDER = 'FFD9D2C2';
+const XL_RESOLVED_BG = 'FFE4EEE6';
+const XL_RESOLVED = 'FF3F6B4D';
+const XL_PENDING_BG = 'FFF5E4DF';
+const XL_PENDING = 'FFB0402E';
+const XL_WHITE = 'FFFFFFFF';
+
+const THIN_BORDER = { style:'thin', color:{argb:XL_BORDER} };
+const ALL_BORDERS = { top:THIN_BORDER, left:THIN_BORDER, bottom:THIN_BORDER, right:THIN_BORDER };
+
+// Construye una hoja de proyecto con formato: cabecera de informe, datos de
+// obra, resumen de actas, rendimiento en gestión de pendientes y detalle,
+// lista para imprimirse en A4 apaisado (horizontal).
+function buildObraWorksheetStyled(workbook, obra, cerradas){
+  const todayISO = new Date().toISOString().slice(0,10);
+  const uniquePend = {};
+  cerradas.forEach(a=> (a.asuntosPendientes||[]).forEach(p=>{ uniquePend[p.codigo] = p; }));
+  const pendList = Object.values(uniquePend).sort((a,b)=> (a.codigo||'').localeCompare(b.codigo||''));
+  const resueltos = pendList.filter(p=>p.resuelto);
+  const abiertos = pendList.filter(p=>!p.resuelto);
+  const resolTimes = resueltos.map(p=>daysBetweenDates(p.fechaApertura,p.fechaResolucion)).filter(d=>d!=null);
+  const avgResol = resolTimes.length ? (resolTimes.reduce((a,b)=>a+b,0)/resolTimes.length).toFixed(1) : '—';
+  const openTimes = abiertos.map(p=>daysBetweenDates(p.fechaApertura,todayISO)).filter(d=>d!=null);
+  const avgOpen = openTimes.length ? (openTimes.reduce((a,b)=>a+b,0)/openTimes.length).toFixed(1) : '—';
+
+  const ws = workbook.addWorksheet(sheetNameForExcelJS(obra.obra, workbook), {
+    pageSetup: {
+      orientation: 'landscape',
+      paperSize: 9, // A4
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left:0.35, right:0.35, top:0.45, bottom:0.45, header:0.2, footer:0.2 },
+      horizontalCentered: true,
+    },
+  });
+  const NCOLS = 9; // A..I — el máximo de columnas que usa cualquier tabla de esta hoja
+  ws.columns = [
+    { width:13 }, { width:44 }, { width:17 }, { width:13 },
+    { width:13 }, { width:14 }, { width:9 }, { width:32 }, { width:9 },
+  ];
+
+  let r = 1;
+  function mergeRow(rowIdx, fromCol, toCol){ ws.mergeCells(rowIdx, fromCol, rowIdx, toCol); }
+  function fillRow(rowIdx, argb, fromCol, toCol){
+    for(let c=fromCol; c<=toCol; c++){ ws.getCell(rowIdx,c).fill = { type:'pattern', pattern:'solid', fgColor:{argb} }; }
+  }
+
+  // ---------- Cabecera / portada ----------
+  ws.getRow(r).height = 30;
+  mergeRow(r,1,NCOLS);
+  fillRow(r, XL_BLUEPRINT, 1, NCOLS);
+  const titleCell = ws.getCell(r,1);
+  titleCell.value = 'ACTAS DE VISITA DE OBRA';
+  titleCell.font = { name:'Calibri', bold:true, size:16, color:{argb:XL_WHITE} };
+  titleCell.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+  r++;
+  ws.getRow(r).height = 4;
+  fillRow(r, XL_SAFETY, 1, NCOLS); mergeRow(r,1,NCOLS);
+  r++;
+  ws.getRow(r).height = 22;
+  mergeRow(r,1,NCOLS);
+  const subtitleCell = ws.getCell(r,1);
+  subtitleCell.value = obra.obra || 'Proyecto sin nombre';
+  subtitleCell.font = { name:'Calibri', bold:true, size:13, color:{argb:XL_BLUEPRINT} };
+  subtitleCell.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+  r++;
+  mergeRow(r,1,NCOLS);
+  const updatedCell = ws.getCell(r,1);
+  updatedCell.value = 'Última actualización: ' + new Date().toLocaleString('es-ES');
+  updatedCell.font = { name:'Calibri', italic:true, size:9, color:{argb:XL_CONCRETE} };
+  updatedCell.alignment = { indent:1 };
+  r += 2;
+
+  function sectionBar(title, span){
+    span = span || NCOLS;
+    ws.getRow(r).height = 18;
+    mergeRow(r,1,span);
+    fillRow(r, XL_BLUEPRINT_LIGHT, 1, span);
+    const c = ws.getCell(r,1);
+    c.value = title;
+    c.font = { name:'Calibri', bold:true, size:10.5, color:{argb:XL_WHITE} };
+    c.alignment = { vertical:'middle', indent:1 };
+    r++;
+  }
+
+  // ---------- Datos de obra ----------
+  sectionBar('DATOS DE OBRA', 6);
+  const datos = [
+    ['Dirección', obra.direccion||'—'],
+    ['Propiedad (P)', obra.propiedad||'—'],
+    ['Director de Obra (DO)', obra.directorObra||'—'],
+    ['D. de Ejecución de Obra (DEO)', obra.deo||'—'],
+    ['Contrata (C)', obra.contrata||'—'],
+    ['Coordinador S y S (CO)', obra.coordinadorSyS||'—'],
+    ['Recurso Preventivo (R)', obra.recursoPreventivo||'—'],
+  ];
+  datos.forEach(([label,val], i)=>{
+    const bg = i%2===0 ? XL_PAPER : XL_ZEBRA;
+    mergeRow(r,1,2); mergeRow(r,3,6);
+    const lc = ws.getCell(r,1), vc = ws.getCell(r,3);
+    lc.value = label; lc.font = { name:'Calibri', bold:true, size:9.5, color:{argb:XL_BLUEPRINT} };
+    vc.value = val; vc.font = { name:'Calibri', size:9.5, color:{argb:XL_INK} };
+    [1,2,3,4,5,6].forEach(c=>{ ws.getCell(r,c).fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} }; ws.getCell(r,c).border = ALL_BORDERS; });
+    lc.alignment = { vertical:'middle', indent:1 };
+    vc.alignment = { vertical:'middle', indent:1, wrapText:true };
+    r++;
+  });
+  r++;
+
+  // ---------- Resumen de actas ----------
+  sectionBar('RESUMEN DE ACTAS', 6);
+  const actaHeaders = ['ACTA','FECHA','PRESENTES','Nº TRATADOS','Nº PEND. ABIERTOS','Nº PEND. RESUELTOS'];
+  actaHeaders.forEach((h,i)=>{
+    const c = ws.getCell(r,i+1);
+    c.value = h; c.font = { name:'Calibri', bold:true, size:9, color:{argb:XL_WHITE} };
+    c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:XL_BLUEPRINT} };
+    c.border = ALL_BORDERS; c.alignment = { vertical:'middle', horizontal:'center', wrapText:true };
+  });
+  ws.getRow(r).height = 24;
+  r++;
+  if(!cerradas.length){
+    mergeRow(r,1,6);
+    const c = ws.getCell(r,1); c.value = 'Todavía no hay actas cerradas.'; c.font = { italic:true, size:9, color:{argb:XL_CONCRETE} };
+    c.border = ALL_BORDERS; r++;
+  } else {
+    cerradas.forEach((a,i)=>{
+      const bg = i%2===0 ? XL_PAPER : XL_ZEBRA;
+      const vals = [a.numero, fmtDate(a.fecha), (a.presentes||[]).join(', '), (a.asuntosTratados||[]).length,
+        (a.asuntosPendientes||[]).filter(p=>!p.resuelto).length, (a.asuntosPendientes||[]).filter(p=>p.resuelto).length];
+      vals.forEach((v,ci)=>{
+        const c = ws.getCell(r,ci+1);
+        c.value = v; c.font = { name:'Calibri', size:9.5, color:{argb:XL_INK} };
+        c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+        c.border = ALL_BORDERS;
+        c.alignment = ci>=3 ? { horizontal:'center', vertical:'middle' } : { vertical:'middle', indent:1 };
+      });
+      r++;
+    });
+  }
+  r++;
+
+  // ---------- Rendimiento en gestión de pendientes ----------
+  sectionBar('RENDIMIENTO EN LA GESTIÓN DE PENDIENTES', 4);
+  const kpis = [
+    ['Total de asuntos pendientes registrados', pendList.length],
+    ['Resueltos', resueltos.length],
+    ['Abiertos actualmente', abiertos.length],
+    ['Días promedio hasta la resolución (resueltos)', avgResol],
+    ['Días promedio en abierto (pendientes actuales)', avgOpen],
+  ];
+  kpis.forEach(([label,val],i)=>{
+    const bg = i%2===0 ? XL_PAPER : XL_ZEBRA;
+    mergeRow(r,1,3);
+    const lc = ws.getCell(r,1), vc = ws.getCell(r,4);
+    lc.value = label; lc.font = { name:'Calibri', size:9.5, color:{argb:XL_INK} };
+    vc.value = val; vc.font = { name:'Calibri', bold:true, size:11, color:{argb:XL_BLUEPRINT} };
+    [1,2,3,4].forEach(c=>{ ws.getCell(r,c).fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} }; ws.getCell(r,c).border = ALL_BORDERS; });
+    lc.alignment = { vertical:'middle', indent:1 };
+    vc.alignment = { vertical:'middle', horizontal:'center' };
+    r++;
+  });
+  r++;
+
+  // ---------- Detalle de asuntos tratados ----------
+  sectionBar('DETALLE DE ASUNTOS TRATADOS', 5);
+  const tratHeaders = ['ACTA','CÓDIGO','ASUNTO','RESPONSABLE(S)','Nº FOTOS'];
+  tratHeaders.forEach((h,i)=>{
+    const c = ws.getCell(r,i+1);
+    c.value = h; c.font = { name:'Calibri', bold:true, size:9, color:{argb:XL_WHITE} };
+    c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:XL_BLUEPRINT} };
+    c.border = ALL_BORDERS; c.alignment = { vertical:'middle', horizontal:'center' };
+  });
+  r++;
+  const allTratados = [];
+  cerradas.forEach(a=> (a.asuntosTratados||[]).forEach(t=> allTratados.push({acta:a.numero, ...t})));
+  if(!allTratados.length){
+    mergeRow(r,1,5);
+    const c = ws.getCell(r,1); c.value = 'Sin asuntos tratados registrados.'; c.font = { italic:true, size:9, color:{argb:XL_CONCRETE} };
+    c.border = ALL_BORDERS; r++;
+  } else {
+    allTratados.forEach((t,i)=>{
+      const bg = i%2===0 ? XL_PAPER : XL_ZEBRA;
+      const vals = [t.acta, t.codigo||'', t.texto||'', respArray(t).join(', '), (t.fotos||[]).length];
+      vals.forEach((v,ci)=>{
+        const c = ws.getCell(r,ci+1);
+        c.value = v; c.font = { name:'Calibri', size:9, color:{argb:XL_INK} };
+        c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+        c.border = ALL_BORDERS;
+        c.alignment = ci===2 ? { vertical:'top', wrapText:true, indent:1 } : { vertical:'middle', horizontal: ci===4?'center':'left', indent: ci===4?0:1 };
+      });
+      // altura de fila: se deja sin fijar para que Excel/LibreOffice autoajuste al texto envuelto
+      r++;
+    });
+  }
+  r++;
+
+  // ---------- Detalle de asuntos pendientes ----------
+  sectionBar('DETALLE DE ASUNTOS PENDIENTES (estado final por asunto)', 9);
+  const pendHeaders = ['CÓDIGO','ASUNTO','RESPONSABLE(S)','ESTADO','APERTURA','RESOLUCIÓN','DÍAS','EXPLICACIÓN DE LA RESOLUCIÓN','Nº FOTOS'];
+  pendHeaders.forEach((h,i)=>{
+    const c = ws.getCell(r,i+1);
+    c.value = h; c.font = { name:'Calibri', bold:true, size:9, color:{argb:XL_WHITE} };
+    c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:XL_BLUEPRINT} };
+    c.border = ALL_BORDERS; c.alignment = { vertical:'middle', horizontal:'center', wrapText:true };
+  });
+  ws.getRow(r).height = 24;
+  r++;
+  if(!pendList.length){
+    mergeRow(r,1,9);
+    const c = ws.getCell(r,1); c.value = 'Sin asuntos pendientes registrados.'; c.font = { italic:true, size:9, color:{argb:XL_CONCRETE} };
+    c.border = ALL_BORDERS; r++;
+  } else {
+    pendList.forEach((p,i)=>{
+      const bg = i%2===0 ? XL_PAPER : XL_ZEBRA;
+      const dias = p.resuelto ? daysBetweenDates(p.fechaApertura,p.fechaResolucion) : daysBetweenDates(p.fechaApertura,todayISO);
+      const vals = [
+        p.codigo, p.texto||'', respArray(p).join(', '), p.resuelto?'Resuelto':'Pendiente',
+        p.fechaApertura?fmtDate(p.fechaApertura):'', p.fechaResolucion?fmtDate(p.fechaResolucion):'',
+        dias!=null?dias:'', p.resuelto?(p.resueltoTexto||''):'', (p.fotos||[]).length
+      ];
+      vals.forEach((v,ci)=>{
+        const c = ws.getCell(r,ci+1);
+        c.value = v; c.font = { name:'Calibri', size:9, color:{argb:XL_INK} };
+        c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:bg} };
+        c.border = ALL_BORDERS;
+        if(ci===1 || ci===7){ c.alignment = { vertical:'top', wrapText:true, indent:1 }; }
+        else if(ci===3){ c.alignment = { vertical:'middle', horizontal:'center' }; }
+        else if(ci===6 || ci===8){ c.alignment = { vertical:'middle', horizontal:'center' }; }
+        else { c.alignment = { vertical:'middle', indent:1 }; }
+      });
+      // resalta el estado como en la app: verde si resuelto, naranja si sigue pendiente
+      const statusCell = ws.getCell(r,4);
+      statusCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb: p.resuelto?XL_RESOLVED_BG:XL_PENDING_BG} };
+      statusCell.font = { name:'Calibri', bold:true, size:9, color:{argb: p.resuelto?XL_RESOLVED:XL_PENDING} };
+      // altura de fila: autoajuste (igual que en asuntos tratados)
+      r++;
+    });
+  }
+
+  ws.pageSetup.printArea = 'A1:' + ws.getColumn(NCOLS).letter + (r-1);
+  ws.views = [{ state:'frozen', ySplit:3 }];
+  return ws;
+}
+
+// Excel de UN proyecto: se genera/actualiza autom\u00e1ticamente cada vez que se
+// cierra un acta (junto con el PDF), y tambi\u00e9n se puede descargar a mano.
+/* ---------------------- ENLACE CON ARCHIVO EXCEL LOCAL (demo) ---------------------- */
+// Usa la File System Access API del navegador (solo Chrome/Edge de escritorio,
+// abriendo este archivo directamente, no dentro de una vista previa integrada)
+// para escribir en el MISMO archivo .xlsx del disco cada vez que se cierra un
+// acta, sin descargar una copia nueva. El permiso dura mientras esta pestaña
+// siga abierta; no se puede recordar entre sesiones por seguridad del navegador.
+const localFileHandles = {}; // obraId -> FileSystemFileHandle (solo en memoria)
+
+function supportsLocalFileLink(){
+  return typeof window.showSaveFilePicker === 'function';
+}
+
+async function linkLocalExcelFile(obraId, obra){
+  if(!supportsLocalFileLink()){
+    showToast('Tu navegador no permite vincular archivos locales. Abre este archivo directamente en Chrome o Edge de escritorio (no en la vista previa del chat).');
+    return false;
+  }
+  try{
+    const suggestedName = 'Actas_'+(obra.obra||'Obra').replace(/[^a-z0-9]+/gi,'_')+'.xlsx';
+    const handle = await window.showSaveFilePicker({
+      suggestedName,
+      types: [{ description:'Libro de Excel', accept: {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']} }]
+    });
+    localFileHandles[obraId] = handle;
+    await writeExcelToLinkedFile(obraId, obra, state.currentObraData.actas);
+    showToast('Archivo vinculado: ' + handle.name);
+    return true;
+  }catch(e){
+    if(e && e.name !== 'AbortError'){ console.error(e); showToast('No se pudo vincular el archivo'); }
+    return false;
+  }
+}
+
+async function writeExcelToLinkedFile(obraId, obra, actas){
+  const handle = localFileHandles[obraId];
+  if(!handle) return false;
+  try{
+    if((await handle.queryPermission({mode:'readwrite'})) !== 'granted'){
+      const perm = await handle.requestPermission({mode:'readwrite'});
+      if(perm !== 'granted') throw new Error('Permiso denegado por el usuario');
+    }
+    const cerradas = actas.filter(a=>a.cerrada);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Actas de Visita de Obra';
+    buildObraWorksheetStyled(workbook, obra, cerradas);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const writable = await handle.createWritable();
+    await writable.write(buffer);
+    await writable.close();
+    return true;
+  }catch(e){
+    console.error('write local file failed', e);
+    showToast('No se pudo escribir en el archivo local vinculado (¿sigue existiendo y accesible?)');
+    return false;
+  }
+}
+
+function downloadExcelBuffer(buffer, filename){
+  const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+async function exportExcelForObra(obra, actas, opts){
+  opts = opts || {};
+  const cerradas = actas.filter(a=>a.cerrada);
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Actas de Visita de Obra';
+  buildObraWorksheetStyled(workbook, obra, cerradas);
+  const buffer = await workbook.xlsx.writeBuffer();
+  const fname = 'Actas_'+(obra.obra||'Obra').replace(/[^a-z0-9]+/gi,'_')+'.xlsx';
+  downloadExcelBuffer(buffer, fname);
+  if(!opts.silent) showToast('Excel del proyecto actualizado');
+}
+
+/* ---------------------- SINCRONIZACIÓN CON GOOGLE SHEETS ---------------------- */
+// Envía los datos de un proyecto a un script de Google Apps Script publicado
+// como aplicación web, que escribe/actualiza una pestaña con su nombre.
+// Usamos mode:'no-cors' porque los endpoints de Apps Script no siempre
+// devuelven cabeceras CORS legibles: el envío llega igualmente, pero no
+// podemos leer la respuesta desde el navegador (por eso no se puede
+// confirmar aquí el éxito exacto; conviene revisar la hoja tras sincronizar).
+async function getSyncUrl(){
+  return (await storageGet('sync_webapp_url')) || '';
+}
+async function syncProjectToSheet(obra, actas, opts){
+  opts = opts || {};
+  const url = await getSyncUrl();
+  if(!url){ if(!opts.silent) showToast('Configura antes la URL en Sincronización con Sheets'); return false; }
+  try{
+    const cerradas = actas.filter(a=>a.cerrada);
+    const rows = buildObraSheetAOA(obra, cerradas);
+    await fetch(url, {
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ sheetName: obra.obra || 'Obra', rows })
+    });
+    if(!opts.silent) showToast('Enviado a Google Sheets — revisa la hoja para confirmarlo');
+    return true;
+  }catch(e){
+    console.error('sync failed', e);
+    if(!opts.silent) showToast('No se pudo sincronizar: revisa la URL o tu conexión');
+    return false;
+  }
+}
+
+/* ==========================================================
+   SCREEN: Sincronización con Google Sheets
+   ========================================================== */
+async function goSyncSettings(){
+  state.screen='syncSettings';
+  state.syncUrlDraft = await getSyncUrl();
+  render();
+}
+function renderSyncSettings(){
+  return `
+    <div class="pending-carry-box">
+      Conecta esta app con una hoja de Google Sheets para que el registro de cada proyecto se actualice solo, cada vez que cierres un acta. La misma hoja de cálculo puede tener una pestaña por proyecto.
+    </div>
+    <div class="card tick-frame">
+      <div class="field">
+        <label>URL de la aplicación web (Apps Script)</label>
+        <input type="text" id="syncUrlInput" placeholder="https://script.google.com/macros/s/XXXXX/exec" value="${esc(state.syncUrlDraft)}">
+        <p class="hint">Termina en <span class="mono">/exec</span>. Déjala vacía para desactivar la sincronización.</p>
+      </div>
+      <button class="btn btn-primary btn-block" id="saveSyncUrlBtn">Guardar</button>
+    </div>
+    <div class="action-tile" id="syncAllTile" style="margin-bottom:16px;">
+      <span class="icon">🔄</span><span class="label">Sincronizar todos los proyectos ahora</span>
+    </div>
+    <p class="section-label">Cómo crear el enlace en vivo</p>
+    <div class="card tick-frame" style="font-size:12.5px;line-height:1.65;color:var(--ink-soft);">
+      <ol style="margin:0;padding-left:18px;">
+        <li>Ve a <strong>sheets.google.com</strong> y crea una hoja nueva (p. ej. "Actas de Obra — Registro").</li>
+        <li>Menú <strong>Extensiones → Apps Script</strong>.</li>
+        <li>Borra el código de ejemplo (<span class="mono">Code.gs</span>) y pega el script que te dio Claude en el chat.</li>
+        <li>Guarda el proyecto (icono de disco).</li>
+        <li><strong>Implementar → Nueva implementación</strong> → tipo <strong>Aplicación web</strong>.</li>
+        <li>"Ejecutar como": <strong>Yo</strong>. "Quién tiene acceso": <strong>Cualquier usuario</strong>.</li>
+        <li>Pulsa <strong>Implementar</strong> y autoriza los permisos (es tu propio script, es seguro).</li>
+        <li>Copia la URL que termina en <span class="mono">/exec</span> y pégala arriba.</li>
+      </ol>
+      <p class="hint" style="margin-top:10px;">Esa URL funciona como una contraseña larga: quien la tenga puede escribir en tu hoja. No la compartas públicamente.</p>
+    </div>
+  `;
+}
+function bindSyncSettings(){
+  document.getElementById('saveSyncUrlBtn').addEventListener('click', async ()=>{
+    const url = document.getElementById('syncUrlInput').value.trim();
+    if(url && !url.startsWith('https://script.google.com/')){
+      const ok = await confirmDialog('URL inusual', 'Esta URL no parece de Apps Script (https://script.google.com/...). ¿Guardarla igualmente?');
+      if(!ok) return;
+    }
+    await storageSet('sync_webapp_url', url);
+    showToast(url? 'URL guardada' : 'Sincronización desactivada');
+  });
+  document.getElementById('syncAllTile').addEventListener('click', async ()=>{
+    const url = await getSyncUrl();
+    if(!url){ showToast('Guarda antes una URL válida'); return; }
+    showLoading('Sincronizando proyectos…');
+    await loadObrasIndex();
+    let count=0;
+    for(const item of state.obrasIndex){
+      const data = await loadObraData(item.id);
+      if(!data) continue;
+      const ok = await syncProjectToSheet(data.obra, data.actas, {silent:true});
+      if(ok) count++;
+    }
+    hideLoading();
+    showToast(count? `Enviados ${count} proyecto(s) a Sheets — revisa la hoja` : 'No se pudo sincronizar');
+  });
+}
+
+/* ==========================================================
+   DROPBOX: Excel en vivo en la nube (funciona en cualquier
+   dispositivo/navegador, a diferencia del enlace a archivo local)
+   ========================================================== */
+// Usa la API pública de Dropbox con el flujo OAuth2 + PKCE para apps sin
+// servidor propio ("aplicación pública"). Requiere que el usuario cree su
+// propia app en dropbox.com/developers (gratis) y pegue aquí su "App key".
+// El archivo se sube a la carpeta de la app dentro de Dropbox
+// (Apps/<nombre de tu app>/), sobrescribiéndose cada vez que se cierra un acta.
+
+function base64UrlEncode(buffer){
+  let str = '';
+  const bytes = new Uint8Array(buffer);
+  for(let i=0;i<bytes.byteLength;i++) str += String.fromCharCode(bytes[i]);
+  return btoa(str).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function randomPkceString(len){
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  return base64UrlEncode(arr.buffer).slice(0,len);
+}
+async function pkceChallengeFromVerifier(verifier){
+  const enc = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', enc);
+  return base64UrlEncode(digest);
+}
+
+async function getDropboxAppKey(){ return (await storageGet('dropbox_app_key')) || ''; }
+async function getDropboxRefreshToken(){ return (await storageGet('dropbox_refresh_token')) || ''; }
+
+async function dropboxStartConnect(){
+  const appKey = await getDropboxAppKey();
+  if(!appKey){ showToast('Pega antes tu App Key de Dropbox'); return; }
+  const verifier = randomPkceString(64);
+  state.dropboxPkceVerifier = verifier; // vive solo en memoria durante esta sesión
+  const challenge = await pkceChallengeFromVerifier(verifier);
+  const params = new URLSearchParams({
+    client_id: appKey,
+    response_type: 'code',
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    token_access_type: 'offline',
+  });
+  const url = 'https://www.dropbox.com/oauth2/authorize?' + params.toString();
+  window.open(url, '_blank');
+}
+
+async function dropboxConfirmCode(code){
+  const appKey = await getDropboxAppKey();
+  const verifier = state.dropboxPkceVerifier;
+  if(!verifier){ showToast('Vuelve a pulsar "Conectar con Dropbox" antes de pegar el código'); return false; }
+  try{
+    const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({
+        code: code.trim(), grant_type:'authorization_code', client_id: appKey, code_verifier: verifier,
+      }),
+    });
+    if(!resp.ok){ const t = await resp.text(); throw new Error('Dropbox respondió '+resp.status+': '+t.slice(0,150)); }
+    const data = await resp.json();
+    if(!data.refresh_token) throw new Error('Dropbox no devolvió un token permanente');
+    await storageSet('dropbox_refresh_token', data.refresh_token);
+    state.dropboxPkceVerifier = null;
+    showToast('Conectado con Dropbox');
+    return true;
+  }catch(e){
+    console.error('dropbox code exchange failed', e);
+    showToast('No se pudo conectar: '+e.message);
+    return false;
+  }
+}
+
+async function dropboxGetAccessToken(){
+  const appKey = await getDropboxAppKey();
+  const refreshToken = await getDropboxRefreshToken();
+  if(!appKey || !refreshToken) return null;
+  try{
+    const resp = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({ grant_type:'refresh_token', refresh_token:refreshToken, client_id:appKey }),
+    });
+    if(!resp.ok) return null;
+    const data = await resp.json();
+    return data.access_token;
+  }catch(e){ console.error('dropbox refresh failed', e); return null; }
+}
+
+async function dropboxDisconnect(){
+  await storageDelete('dropbox_refresh_token');
+  showToast('Desconectado de Dropbox');
+}
+
+// Sube (o actualiza) el Excel de un proyecto en Dropbox.
+async function uploadExcelToDropbox(obra, actas, opts){
+  opts = opts || {};
+  const accessToken = await dropboxGetAccessToken();
+  if(!accessToken){ if(!opts.silent) showToast('Conecta primero con Dropbox en Ajustes'); return false; }
+  try{
+    const cerradas = actas.filter(a=>a.cerrada);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Actas de Visita de Obra';
+    buildObraWorksheetStyled(workbook, obra, cerradas);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const fname = 'Actas_'+(obra.obra||'Obra').replace(/[^a-z0-9]+/gi,'_')+'.xlsx';
+    const resp = await fetch('https://content.dropboxapi.com/2/files/upload', {
+      method:'POST',
+      headers:{
+        'Authorization': 'Bearer '+accessToken,
+        'Dropbox-API-Arg': JSON.stringify({ path:'/'+fname, mode:'overwrite', autorename:false, mute:true }),
+        'Content-Type':'application/octet-stream',
+      },
+      body: buffer,
+    });
+    if(!resp.ok){ const t = await resp.text(); throw new Error('Dropbox respondió '+resp.status+': '+t.slice(0,150)); }
+    if(!opts.silent) showToast('Excel actualizado en Dropbox');
+    return true;
+  }catch(e){
+    console.error('dropbox upload failed', e);
+    if(!opts.silent) showToast('No se pudo subir a Dropbox: '+e.message);
+    return false;
+  }
+}
+
+/* ==========================================================
+   SCREEN: Ajustes de Dropbox
+   ========================================================== */
+async function goDropboxSettings(){
+  state.screen = 'dropboxSettings';
+  state.dropboxAppKeyDraft = await getDropboxAppKey();
+  state.dropboxConnected = !!(await getDropboxRefreshToken());
+  render();
+}
+function renderDropboxSettings(){
+  return `
+    <div class="pending-carry-box">
+      Sube el Excel de cada proyecto directamente a tu Dropbox, actualizándose cada vez que cierras un acta — funciona igual en el móvil, la tablet o el ordenador, sin depender del navegador que uses.
+    </div>
+    <div class="card tick-frame">
+      <div class="field">
+        <label>App Key de Dropbox</label>
+        <input type="text" id="dropboxAppKeyInput" placeholder="Ej. 9abc123def456gh" value="${esc(state.dropboxAppKeyDraft)}">
+        <p class="hint">La consigues gratis creando una app en dropbox.com/developers (ver pasos abajo).</p>
+      </div>
+      <button class="btn btn-primary btn-block" id="saveDropboxKeyBtn">Guardar App Key</button>
+    </div>
+    ${state.dropboxConnected ? `
+      <div class="pending-carry-box" style="border-left-color:var(--resolved);">✅ Conectado con Dropbox.</div>
+      <button class="btn btn-outline btn-block" id="dropboxSyncAllBtn" style="margin-bottom:10px;">☁️ Subir todos los proyectos ahora</button>
+      <button class="btn btn-ghost btn-block" id="dropboxDisconnectBtn" style="margin-bottom:16px;">Desconectar Dropbox</button>
+    ` : `
+      <button class="btn btn-outline btn-block" id="dropboxConnectBtn" style="margin-bottom:10px;">Conectar con Dropbox</button>
+      <div class="card tick-frame" style="margin-bottom:14px;">
+        <div class="field">
+          <label>Código de Dropbox</label>
+          <input type="text" id="dropboxCodeInput" placeholder="Pega aquí el código que te muestre Dropbox">
+        </div>
+        <button class="btn btn-primary btn-block" id="dropboxConfirmBtn">Confirmar conexión</button>
+      </div>
+    `}
+    <p class="section-label">Cómo crear tu App Key (una sola vez)</p>
+    <div class="card tick-frame" style="font-size:12.5px;line-height:1.65;color:var(--ink-soft);">
+      <ol style="margin:0;padding-left:18px;">
+        <li>Ve a <strong>dropbox.com/developers/apps</strong> e inicia sesión con tu cuenta de Dropbox.</li>
+        <li><strong>Create app</strong> → "Scoped access" → tipo de acceso <strong>App folder</strong> (así los archivos quedan aislados en su propia carpeta, no en todo tu Dropbox).</li>
+        <li>Ponle un nombre (por ejemplo "ActasDeObra-TuNombre") y créala.</li>
+        <li>En la pestaña <strong>Permissions</strong>, activa <span class="mono">files.content.write</span> y <span class="mono">files.content.read</span>, y pulsa "Submit".</li>
+        <li>En la pestaña <strong>Settings</strong>, copia el <strong>App key</strong> y pégalo arriba.</li>
+        <li>Pulsa "Conectar con Dropbox": se abrirá una pestaña de Dropbox para autorizar la app.</li>
+        <li>Tras aceptar, Dropbox te mostrará un código. Cópialo y pégalo aquí, y pulsa "Confirmar conexión".</li>
+      </ol>
+      <p class="hint" style="margin-top:10px;">Los archivos aparecerán en tu Dropbox dentro de "Apps/&lt;nombre que le pusiste&gt;/".</p>
+    </div>
+  `;
+}
+function bindDropboxSettings(){
+  document.getElementById('saveDropboxKeyBtn').addEventListener('click', async ()=>{
+    const key = document.getElementById('dropboxAppKeyInput').value.trim();
+    await storageSet('dropbox_app_key', key);
+    showToast(key ? 'App Key guardada' : 'App Key borrada');
+  });
+  const connectBtn = document.getElementById('dropboxConnectBtn');
+  if(connectBtn) connectBtn.addEventListener('click', async ()=>{
+    const key = document.getElementById('dropboxAppKeyInput').value.trim();
+    if(key) await storageSet('dropbox_app_key', key);
+    await dropboxStartConnect();
+  });
+  const confirmBtn = document.getElementById('dropboxConfirmBtn');
+  if(confirmBtn) confirmBtn.addEventListener('click', async ()=>{
+    const code = document.getElementById('dropboxCodeInput').value.trim();
+    if(!code){ showToast('Pega el código que te dio Dropbox'); return; }
+    showLoading('Conectando con Dropbox…');
+    const ok = await dropboxConfirmCode(code);
+    hideLoading();
+    if(ok) goDropboxSettings();
+  });
+  const disconnectBtn = document.getElementById('dropboxDisconnectBtn');
+  if(disconnectBtn) disconnectBtn.addEventListener('click', async ()=>{
+    await dropboxDisconnect();
+    goDropboxSettings();
+  });
+  const syncAllBtn = document.getElementById('dropboxSyncAllBtn');
+  if(syncAllBtn) syncAllBtn.addEventListener('click', async ()=>{
+    showLoading('Subiendo proyectos a Dropbox…');
+    await loadObrasIndex();
+    let count = 0;
+    for(const item of state.obrasIndex){
+      const data = await loadObraData(item.id);
+      if(!data) continue;
+      const ok = await uploadExcelToDropbox(data.obra, data.actas, {silent:true});
+      if(ok) count++;
+    }
+    hideLoading();
+    showToast(count ? `Subidos ${count} proyecto(s) a Dropbox` : 'No se pudo subir nada a Dropbox');
+  });
+}
+
+async function exportExcelAllProjects(){
+  showLoading('Generando Excel\u2026');
+  try{
+    await loadObrasIndex();
+    if(!state.obrasIndex.length){ hideLoading(); showToast('No hay proyectos que exportar'); return; }
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Actas de Visita de Obra';
+    for(const item of state.obrasIndex){
+      const data = await loadObraData(item.id);
+      if(!data) continue;
+      const cerradas = data.actas.filter(a=>a.cerrada);
+      buildObraWorksheetStyled(workbook, data.obra, cerradas);
+    }
+    const buffer = await workbook.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer, 'Actas_de_Obra_Todos_los_Proyectos.xlsx');
+    hideLoading();
+    showToast('Excel generado');
+  }catch(e){
+    console.error(e); hideLoading(); showToast('Error al generar el Excel');
+  }
+}
+
+/* ---------------------- DATOS DE DEMOSTRACIÓN ---------------------- */
+// Proyecto de ejemplo con datos inventados, para poder ver la app en
+// funcionamiento (incluido el arrastre de pendientes entre actas) sin
+// tener que rellenar nada a mano. Se crea una única vez.
+async function seedDemoProjectIfNeeded(){
+  const already = await storageGet('demo_seeded');
+  if(already) return;
+  await loadObrasIndex();
+  if(state.obrasIndex.length>0){ await storageSet('demo_seeded', true); return; }
+
+  const obra = {
+    obra: 'Rehabilitación de fachada — Edificio Mirador',
+    direccion: 'Calle Alcalde José Aparicio, 12, 29640 Fuengirola (Málaga)',
+    propiedad: 'Comunidad de Propietarios Edificio Mirador (Presidente: Antonio Ruiz Vega)',
+    directorObra: 'María Fernández López',
+    deo: 'Juan Carlos Moncayo Muñoz',
+    contrata: 'Construcciones Bermúdez S.L. (rep. Manuel Bermúdez)',
+    coordinadorSyS: 'Juan Carlos Moncayo Muñoz',
+    recursoPreventivo: 'Laura Ortiz Campos',
+  };
+  const obraId = uid();
+  const today = new Date();
+  const fecha1 = new Date(today.getTime()-21*86400000).toISOString().slice(0,10);
+  const fecha2 = new Date(today.getTime()-7*86400000).toISOString().slice(0,10);
+
+  const acta1 = {
+    id: uid(), numero:'A01', fecha:fecha1,
+    presentes:['P','DEO','C'],
+    asuntosTratados:[
+      {id:uid(), codigo:'A01-T01', texto:'Se revisa el estado general de la fachada y se detectan desprendimientos puntuales de revoco en la fachada norte, especialmente en las zonas próximas a las bajantes.', responsables:['DEO']},
+      {id:uid(), codigo:'A01-T02', texto:'Se acuerda el montaje de andamio homologado en fachadas norte y este antes del inicio de los trabajos de picado.', responsables:['C','DEO']},
+    ],
+    asuntosPendientes:[
+      {id:uid(), codigo:'A01-01', texto:'Solicitar a la contrata el certificado de instalación del andamio antes de autorizar su uso.', responsables:['C'], origen:'nuevo', resuelto:false, fechaApertura:fecha1, resueltoTexto:'', fechaResolucion:null},
+      {id:uid(), codigo:'A01-02', texto:'La propiedad debe convocar junta extraordinaria para aprobar el presupuesto adicional de refuerzo de cornisas.', responsables:['P','DO'], origen:'nuevo', resuelto:false, fechaApertura:fecha1, resueltoTexto:'', fechaResolucion:null},
+    ],
+    cerrada:true, fechaCierre:new Date(today.getTime()-21*86400000).toISOString(),
+  };
+  const acta2 = {
+    id: uid(), numero:'A02', fecha:fecha2,
+    presentes:['P','DEO','C','CO'],
+    asuntosTratados:[
+      {id:uid(), codigo:'A02-T01', texto:'Se presenta el certificado de montaje del andamio, quedando validado por el coordinador de seguridad y salud.', responsables:['CO']},
+      {id:uid(), codigo:'A02-T02', texto:'Se inicia el picado de revoco en fachada norte, confirmándose una profundidad de deterioro mayor de la esperada en el encuentro con la cubierta.', responsables:['DEO']},
+    ],
+    asuntosPendientes:[
+      {id:uid(), codigo:'A01-01', texto:'Certificado de instalación del andamio recibido y validado.', responsables:['C'], origen:'anterior', resuelto:true, fechaApertura:fecha1, resueltoTexto:'La contrata aportó el certificado de montaje firmado por técnico competente; revisado y validado por el coordinador de S y S antes del inicio de los trabajos.', fechaResolucion:fecha2},
+      {id:uid(), codigo:'A01-02', texto:'La propiedad debe convocar junta extraordinaria para aprobar el presupuesto adicional de refuerzo de cornisas.', responsables:['P','DO'], origen:'anterior', resuelto:false, fechaApertura:fecha1, resueltoTexto:'', fechaResolucion:null},
+      {id:uid(), codigo:'A02-01', texto:'La contrata deberá presentar valoración económica del refuerzo de cornisas para su aprobación en junta de propietarios.', responsables:['C'], origen:'nuevo', resuelto:false, fechaApertura:fecha2, resueltoTexto:'', fechaResolucion:null},
+    ],
+    cerrada:true, fechaCierre:new Date(today.getTime()-7*86400000).toISOString(),
+  };
+
+  await saveObraData(obraId, {obra, actas:[acta1, acta2]});
+  state.obrasIndex.push({id:obraId, nombre:obra.obra, direccion:obra.direccion});
+  await saveObrasIndex();
+  await storageSet('demo_seeded', true);
+}
+
+/* ---------------------- INIT ---------------------- */
+(async function init(){
+  await seedDemoProjectIfNeeded();
+  await loadObrasIndex();
+  render();
+})();
+
+// Registro del service worker (activa el modo instalable/offline). Solo
+// funciona cuando la app se sirve por https:// o localhost — al abrir el
+// archivo suelto con doble clic (file://) esta línea no hace nada y la app
+// sigue funcionando con normalidad, simplemente sin esa capa extra.
+if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(err=>console.error('No se pudo registrar el service worker', err));
+  });
+}
+</script>
+</body>
+</html>
